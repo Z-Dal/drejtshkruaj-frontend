@@ -1,0 +1,407 @@
+/* In-text suggestion element */
+quill-lt-match {
+  cursor: pointer;
+  border-bottom-width: 3px;
+  border-bottom-style: solid;
+}
+
+/* Spelling errors - red */
+quill-lt-match.spelling-error {
+  border-bottom-color: #ff6a6a;
+}
+quill-lt-match.spelling-error:hover {
+  background-color: rgba(255, 106, 106, 0.1);
+}
+
+/* Grammar errors - orange */
+quill-lt-match.grammar-error {
+  border-bottom-color: #ffa500;
+}
+quill-lt-match.grammar-error:hover {
+  background-color: rgba(255, 165, 0, 0.1);
+}
+
+/* Punctuation errors - light purple */
+quill-lt-match.punctuation-error {
+  border-bottom-color: #9d91e2;
+}
+quill-lt-match.punctuation-error:hover {
+  background-color: rgba(157, 145, 226, 0.1);
+}
+
+/* Popup title colors matching the underlines - move these before the title styles */
+.quill-lt-match-popup-title.spelling-error {
+  color: #ff6a6a;
+}
+
+.quill-lt-match-popup-title.grammar-error {
+  color: #ffa500;
+}
+
+.quill-lt-match-popup-title.punctuation-error {
+  color: #9d91e2;
+}
+
+/* Popup container - controls overall popup dimensions */
+.quill-lt-match-popup {
+  isolation: isolate;
+  background-color: #fff;
+  border-radius: 7px;
+  box-shadow: 0 8px 30px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+  z-index: 1;
+  width: 200px;
+  /* Overall padding of the popup container */
+  padding: 0.5rem 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Avenir Next", Avenir,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol";
+  font-size: 1rem;
+  color: #39475c;
+}
+
+/* Header section - contains title and close button */
+.quill-lt-match-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  /* Space between header and description */
+  margin-bottom: 4px;
+  /* Space above the header/title */
+  padding-top: 4px;
+  position: relative;
+}
+
+/* Close button */
+.quill-lt-match-popup-close {
+  position: absolute;
+  right: -0.4rem;
+  top: -0.4rem;
+  padding: 0.25rem;
+  cursor: pointer;
+  background-color: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: #ccc;
+  line-height: 1;
+}
+
+.quill-lt-match-popup-close:hover {
+  color: #39475c;
+}
+
+/* Title styles */
+.quill-lt-match-popup-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin: 0;
+  margin-bottom: 2px;
+  color: #39475c;
+}
+
+/* Description text */
+.quill-lt-match-popup-description {
+  font-size: 0.8rem;
+  /* Space between description and action buttons */
+  margin-bottom: 6px;
+  line-height: 1.5;
+  color: #64748B;
+}
+
+/* Action buttons container */
+.quill-lt-match-popup-actions {
+  display: flex;
+  flex-direction: column;
+  /* Space between multiple action buttons */
+  gap: 0.5rem;
+}
+
+/* Individual action button */
+.quill-lt-match-popup-action {
+  text-align: start;
+  font-weight: bolder;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  /* Padding inside each action button */
+  padding: 0.5rem;
+  background-color: #E3F3EA;
+  color: #39475c;
+  line-height: 1.2;
+  transition: all 0.2s ease;
+}
+
+.quill-lt-match-popup-action:hover {
+  background-color: #ADE7BE;
+}
+
+/* Powered by section */
+.quill-lt-powered-by {
+  text-align: end;
+  font-size: 0.6rem;
+  color: #999;
+  /* Space above the powered by section */
+  margin-top: 0.5rem;
+}
+
+.quill-lt-powered-by a {
+  color: #999;
+}
+
+/* Arrow styles */
+.quill-lt-popup-arrow,
+.quill-lt-popup-arrow::before {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: inherit;
+}
+
+.quill-lt-popup-arrow {
+  visibility: hidden;
+}
+
+.quill-lt-popup-arrow::before {
+  visibility: visible;
+  content: "";
+  transform: rotate(45deg);
+  background: white;
+}
+
+/* Position arrow for bottom placement */
+quill-lt-popup[data-popper-placement^="bottom"] > .quill-lt-popup-arrow {
+  top: -4px;
+}
+
+/* Loading indicator in editor */
+.quill-lt-loading-indicator {
+  display: none !important;
+}
+
+/* Word info section in stats panel */
+.word-info-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #E2E8F0;
+}
+
+.word-info-header {
+  margin-bottom: 16px;
+}
+
+.word-info-header h3 {
+  font-size: 14px;
+  color: #64748B;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.word-info-word {
+  font-size: 18px;
+  color: #1E293B;
+  font-weight: 600;
+}
+
+.word-info-content {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+  background: #F8FAFC;
+  padding: 16px;
+  border-radius: 12px;
+}
+
+/* Word info popup specific colors - adjust these values to change the theme */
+.quill-lt-match-popup .word-info-title {
+  /* Dark blue color for the word info title - darker version of Quill's selection color */
+  color: #5a77b5;
+}
+
+.quill-lt-match-popup .word-info-action {
+  /* Light blue background matching Quill's selection color */
+  background-color: #b4d5fe;
+  color: #2c5282;
+}
+
+.quill-lt-match-popup .word-info-action:hover {
+  /* Slightly darker version of the selection color */
+  background-color: #a3c9fd;
+}
+
+/* Ignore suggestion button colors */
+.quill-lt-match-popup .ignore-suggestion {
+  /* Light gray background for ignore button */
+  background-color: #F1F5F9;
+  color: #64748B;
+}
+
+.quill-lt-match-popup .ignore-suggestion:hover {
+  /* Slightly darker background on hover */
+  background-color: #E2E8F0;
+}
+
+/* ===== Popup Type Colors ===== */
+/* Each popup type (spelling, grammar, punctuation, word info) has its own color scheme */
+
+/* Spelling error theme - red */
+.quill-lt-match-popup-title.spelling-error {
+  color: #ff6a6a;  /* Bright red for title */
+}
+.quill-lt-match-popup .spelling-action {
+  background-color: #fff1f0;  /* Light red background */
+  color: #ff6a6a;
+}
+.quill-lt-match-popup .spelling-action:hover {
+  background-color: #ffe4e2;  /* Slightly darker on hover */
+}
+
+/* Grammar error theme - orange */
+.quill-lt-match-popup-title.grammar-error {
+  color: #ffa500;  /* Orange for title */
+}
+.quill-lt-match-popup .grammar-action {
+  background-color: #fff7e6;  /* Light orange background */
+  color: #ffa500;
+}
+.quill-lt-match-popup .grammar-action:hover {
+  background-color: #ffecd1;  /* Slightly darker on hover */
+}
+
+/* Punctuation error theme - blue-purple */
+.quill-lt-match-popup-title.punctuation-error {
+  color: #9d91e2;  /* Lighter blue-purple for title */
+}
+.quill-lt-match-popup .punctuation-action {
+  background-color: #f5f3ff;  /* Light blue-purple background */
+  color: #7c70c9;  /* Lighter blue-purple for text */
+}
+.quill-lt-match-popup .punctuation-action:hover {
+  background-color: #ebe8ff;  /* Slightly darker on hover */
+}
+
+/* Word info theme - blue */
+.quill-lt-match-popup .word-info-title {
+  color: #5a77b5;  /* Dark blue for title */
+}
+.quill-lt-match-popup .word-info-action {
+  background-color: #e5f0ff;  /* Lighter blue matching Quill's selection */
+  color: #4d6684;
+}
+.quill-lt-match-popup .word-info-action:hover {
+  background-color: #d1e5ff;  /* Slightly darker on hover, but still light */
+}
+
+/* Description text styles - consistent across all popup types */
+.quill-lt-match-popup-description {
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+  line-height: 1.5;
+  color: #64748B;  /* Consistent gray color for all descriptions */
+}
+
+/* Ignore button - consistent style across all popup types */
+.quill-lt-match-popup .ignore-suggestion {
+  background-color: #F1F5F9;
+  color: #64748B;
+}
+.quill-lt-match-popup .ignore-suggestion:hover {
+  background-color: #E2E8F0;
+}
+
+/* Header container in right stats panel */
+.header-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-container h3 {
+  margin: 0;
+  flex: 1;
+}
+
+/* Status indicator in right stats panel */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.status-indicator.editing {
+  background-color: #F1F5F9;
+  color: #64748B;
+  border-color: #E2E8F0;
+}
+
+.status-indicator.editing .status-indicator-icon {
+  transform: rotate(-45deg);
+}
+
+.status-indicator.checking {
+  background-color: #EFF6FF;
+  color: #3B82F6;
+  border-color: #BFDBFE;
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.checked {
+  background-color: #F0FDF4;
+  color: #22C55E;
+  border-color: #BBF7D0;
+}
+
+.status-indicator.checked .status-indicator-icon {
+  animation: sparkle 1s ease;
+}
+
+.status-indicator-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  transition: all 0.3s ease;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sparkle {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.2) rotate(20deg);
+  }
+  50% {
+    transform: scale(0.9) rotate(-20deg);
+  }
+  75% {
+    transform: scale(1.1) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
