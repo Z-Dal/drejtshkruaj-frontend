@@ -49,6 +49,20 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.ok) {
+        // Log cookies for debugging
+        console.log('Cookies after login:', document.cookie);
+        
+        // Try to get the token from the response
+        try {
+          const data = await response.json();
+          if (data && data.access_token) {
+            console.log('Received access token, storing for API calls');
+            localStorage.setItem('drejtshkruaj_auth_token', data.access_token);
+          }
+        } catch (e) {
+          console.log('No JSON response with token');
+        }
+        
         const success = await checkAuth();
         if (success) {
           navigate('/');

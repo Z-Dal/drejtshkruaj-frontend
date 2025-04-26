@@ -609,12 +609,24 @@ export default class PopupManager {
     try {
       console.log(`Sending request to ${action} endpoint:`, requestBody);
       const endpoint = action === 'meaning' ? 'morphology' : 'synonyms';
-      const response = await fetch(this.parent.params.server + "drejtshkruaj/v2/" + endpoint, {
+      
+      // Headers for the request
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      
+      // If there's a manually stored auth token, try adding it to the request
+      const authToken = localStorage.getItem('drejtshkruaj_auth_token');
+      if (authToken) {
+        console.log('Using manually stored auth token for word info request');
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      
+      const response = await fetch(this.parent.params.server + "drejtshkruaj/" + endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         mode: "cors",
+        credentials: "include",
         body: JSON.stringify(requestBody)
       });
 
@@ -634,7 +646,13 @@ export default class PopupManager {
         data,
         type: typeof data,
         isArray: Array.isArray(data),
-        keys: data ? Object.keys(data) : null
+        keys: data ? Object.keys(data) : null,
+        result: data?.result ? {
+          wordform: data.result.wordform,
+          morphology: data.result.morphology,
+          context: data.result.context,
+          dictionary: data.result.dictionary
+        } : null
       });
       
       // Update the word info section with the response
@@ -692,18 +710,21 @@ export default class PopupManager {
       </div>`;
     }
 
+    // Extract result data if present in the new format
+    const resultData = data.result || data;
+
     if (action === 'meaning') {
       return `
         <div style="display: flex; flex-direction: column; gap: 16px;">
-          ${data.morphology || data.dictionary ? `
+          ${resultData.morphology || resultData.dictionary ? `
             <div style="color: #475569; line-height: 1.6;">
-              ${data.morphology ? `
+              ${resultData.morphology ? `
                 <div style="margin-bottom: 16px;">
                   <div style="font-weight: 600; color: #1E293B; margin-bottom: 4px;">
                     Morfologjia:
                   </div>
                   <div style="color: #475569;">
-                    ${data.morphology}
+                    ${resultData.morphology}
                   </div>
                 </div>
               ` : ''}
@@ -713,8 +734,8 @@ export default class PopupManager {
                   Kuptimi në fjalor:
                 </div>
                 <div style="color: #475569;">
-                  ${data.dictionary && data.dictionary !== 'NOT IMPLEMENTED YET' 
-                    ? data.dictionary 
+                  ${resultData.dictionary && resultData.dictionary !== 'NOT IMPLEMENTED YET' 
+                    ? resultData.dictionary 
                     : '<span style="color: #94A3B8; font-style: italic;">Ende nuk është implementuar.</span>'}
                 </div>
               </div>

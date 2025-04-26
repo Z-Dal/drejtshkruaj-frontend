@@ -23,7 +23,7 @@ type ParamsObject = {
 
 export class QuillDrejtshkruaj {
   static DEFAULTS: QuillDrejtshkruajParams = {
-    server: "http://127.0.0.1:8000/",
+    server: "http://localhost:8000/",
     language: "sq",
     disableNativeSpellcheck: true,
     cooldownTime: 4000,
@@ -207,17 +207,38 @@ export class QuillDrejtshkruaj {
     const params = this.getApiParams(text);
 
     try {
-      const response = await fetch(this.params.server + "drejtshkruaj/v2/spellings", {
+      // Debug: Log cookies to see if auth cookie exists
+      console.log('Cookies before spellings request:', document.cookie);
+      
+      // Headers for the request
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      
+      // If there's a manually stored auth token, try adding it to the request
+      const authToken = localStorage.getItem('drejtshkruaj_auth_token');
+      if (authToken) {
+        console.log('Using manually stored auth token');
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      
+      const response = await fetch(this.params.server + "drejtshkruaj/spellings", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
+        credentials: "include",
         mode: "cors",
         body: JSON.stringify(params),
       });
+      
+      if (response.status === 401) {
+        console.error("Authentication error: Unauthorized. Check if your cookie is being sent correctly");
+        return null;
+      }
+      
       const json = (await response.json()) as DrejtshkruajApi;
       return json;
     } catch (e) {
+      console.error("Error in getDrejtshkruajResults:", e);
       return null;
     }
   }
