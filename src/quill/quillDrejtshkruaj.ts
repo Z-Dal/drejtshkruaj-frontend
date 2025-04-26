@@ -79,11 +79,30 @@ export class QuillDrejtshkruaj {
     // Clear cache for modified range
     if (delta && delta.ops) {
       let changeStart = 0;
+      let hasDelete = false;
+      let textDeleted = false;
       
       // Calculate the affected range from delta ops
       delta.ops.forEach((op: any) => {
         if (op.retain) {
           changeStart += op.retain;
+        }
+        if (op.delete) {
+          hasDelete = true;
+          textDeleted = true;
+          // For delete operations, immediately remove matches in the deleted range
+          const deleteEnd = changeStart + op.delete;
+          this.matches = this.matches.filter(m => {
+            // Keep matches that don't overlap with the deleted range
+            return !(m.offset >= changeStart && m.offset < deleteEnd);
+          });
+          
+          // Also, update offsets for matches after the deletion
+          this.matches.forEach(match => {
+            if (match.offset >= deleteEnd) {
+              match.offset -= op.delete;
+            }
+          });
         }
         if (op.insert || op.delete) {
           // Find paragraph boundaries
@@ -111,6 +130,23 @@ export class QuillDrejtshkruaj {
           });
         }
       });
+      
+      // Check if all text was deleted
+      const currentText = this.quill.getText().trim();
+      if (currentText === '' && textDeleted) {
+        // Clear all matches if text is empty
+        this.matches = [];
+        hasDelete = true;
+      }
+      
+      // If text was deleted, update the UI right away
+      if (hasDelete) {
+        // Immediately update stats
+        this.updateStats();
+        // Immediately update suggestion boxes
+        this.boxes.removeSuggestionBoxes();
+        this.boxes.addSuggestionBoxes();
+      }
     }
 
     this.typingCooldown = setTimeout(() => {
@@ -156,6 +192,8 @@ export class QuillDrejtshkruaj {
         this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
         // Update suggestion boxes for unchanged paragraph
         this.boxes.updateSuggestionBoxesForRange(chunk.startOffset, chunk.endOffset);
+        // Update stats after each chunk
+        this.updateStats();
         continue;
       }
       
@@ -192,8 +230,12 @@ export class QuillDrejtshkruaj {
       
       // Update suggestion boxes only for the current paragraph range
       this.boxes.updateSuggestionBoxesForRange(chunk.startOffset, chunk.endOffset);
+      
+      // Update stats after processing each chunk
+      this.updateStats();
     }
 
+    // Final stats update at the end
     this.updateStats();
     this.loader.stopLoading();
   }
@@ -287,7 +329,7 @@ export class QuillDrejtshkruaj {
     rightStatsPanel.className = 'right-stats-panel';
     rightStatsPanel.innerHTML = `
       <div class="header">
-        <h3>Vërejtjet gjuhësore</h3>
+        <h3>VËREJTJET GJUHËSORE</h3>
       </div>
       <div class="stats-counter">
         <div class="counter-item counter-spelling">

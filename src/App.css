@@ -47,8 +47,8 @@ body {
 /* Main container */
 .appCss {
   display: flex;
-  gap: 32px;
-  padding: 32px;
+  gap: 16px;
+  padding: 16px;
   max-width: 1200px;
   margin: 0 auto;
   min-height: 100vh;
@@ -63,7 +63,7 @@ body {
   max-width: 800px;
   margin: 0 auto;
   background-color: #fff;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
   position: relative;
   height: fit-content;
@@ -75,26 +75,26 @@ body {
 
 /* Right side panel - Statistics */
 .right-stats-panel {
-  width: 280px;
-  min-width: 280px;
+  width: 260px;
+  min-width: 260px;
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
-  padding: 24px;
+  padding: 16px;
   height: fit-content;
   position: sticky;
-  top: 32px;
+  top: 16px;
   align-self: flex-start;
 }
 
 .right-stats-panel .header {
-  padding-bottom: 16px;
-  margin-bottom: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
   border-bottom: 1px solid #E2E8F0;
 }
 
 .right-stats-panel .header h3 {
-  font-size: 14px;
+  font-size: 13px;
   color: #64748B;
   font-weight: 600;
   text-transform: uppercase;
@@ -106,15 +106,15 @@ body {
 .stats-counter {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 .counter-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  border-radius: 12px;
+  padding: 12px;
+  border-radius: 8px;
   background: #F8FAFC;
   transition: background-color 0.2s;
 }
@@ -124,11 +124,11 @@ body {
 }
 
 .counter-label {
-  font-size: 14px;
+  font-size: 13px;
   color: #475569;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .counter-dot {
@@ -138,7 +138,7 @@ body {
 }
 
 .counter-value {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #1E293B;
 }
@@ -157,8 +157,8 @@ body {
 }
 
 .counter-total {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid #E2E8F0;
 }
 
@@ -166,8 +166,8 @@ body {
 .ql-toolbar.ql-snow {
   border: none !important;
   border-bottom: 1px solid #E2E8F0 !important;
-  padding: 16px !important;
-  border-radius: 16px 16px 0 0;
+  padding: 8px 12px !important;
+  border-radius: 12px 12px 0 0;
 }
 
 /* Quill editor container */
@@ -186,11 +186,11 @@ body {
   width: 100%;
   max-width: 800px;
   margin: 0 !important;
-  padding: 36px !important;
+  padding: 20px 24px !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 16px;
   color: #1E293B;
-  line-height: 1.8;
+  line-height: 1.6;
   min-height: 500px;
   position: relative;
   text-align: left !important;
@@ -210,8 +210,8 @@ body {
   position: absolute;
   content: attr(data-placeholder);
   pointer-events: none;
-  left: 36px !important;
-  top: 36px !important;
+  left: 24px !important;
+  top: 20px !important;
   margin: 0 !important;
   padding: 0 !important;
   width: auto !important;
@@ -222,8 +222,8 @@ body {
 /* Loading indicator */
 .quill-lt-loading-indicator {
   position: absolute;
-  bottom: 24px;
-  right: 24px;
+  bottom: 16px;
+  right: 16px;
   z-index: 10;
 }
 
@@ -231,8 +231,8 @@ body {
 @media (max-width: 1024px) {
   .appCss {
     flex-direction: column;
-    padding: 16px;
-    gap: 16px;
+    padding: 8px;
+    gap: 8px;
     margin: 0;
   }
 
