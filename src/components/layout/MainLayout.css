@@ -6,7 +6,7 @@
 }
 
 .top-bar {
-  background-color: white;
+  background-color: #4a90e2;
   padding: 1rem 2rem;
   display: flex;
   justify-content: space-between;
@@ -17,16 +17,20 @@
   left: 0;
   right: 0;
   z-index: 1000;
+  color: white;
 }
 
 .app-title {
   font-size: 1.5rem;
-  color: #333;
+  color: white;
   margin: 0;
 }
 
 .profile-section {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .profile-toggle {

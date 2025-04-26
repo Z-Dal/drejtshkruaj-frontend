@@ -1,0 +1,80 @@
+.subscription-container {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.subscription-header {
+  margin-bottom: 12px;
+}
+
+.subscription-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.subscription-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subscription-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.subscription-label {
+  color: #555;
+  font-weight: normal;
+}
+
+.subscription-value {
+  font-weight: 500;
+  color: #333;
+}
+
+/* Status colors */
+.status-active {
+  color: #4caf50;
+}
+
+.status-inactive {
+  color: #f44336;
+}
+
+/* Days remaining indicators */
+.days-normal {
+  color: #4caf50;
+}
+
+.days-warning {
+  color: #ff9800;
+}
+
+.days-critical {
+  color: #f44336;
+}
+
+/* Loading state */
+.subscription-loading {
+  text-align: center;
+  padding: 12px;
+  color: #777;
+  font-size: 14px;
+}
+
+/* Error state */
+.subscription-error {
+  text-align: center;
+  padding: 12px;
+  color: #f44336;
+  font-size: 14px;
+  background-color: #ffebee;
+  border-radius: 4px;
+} 

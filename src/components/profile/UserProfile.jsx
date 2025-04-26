@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../auth/AuthContext';
+import SubscriptionInfo from './SubscriptionInfo';
 import './UserProfile.css';
 
 const UserProfile = ({ minimal = false }) => {
@@ -37,18 +38,24 @@ const UserProfile = ({ minimal = false }) => {
           </div>
         </div>
         <div className="profile-info">
-          <div className="info-group">
-            <label>Account Status</label>
-            <p className={`status ${user.is_active ? 'active' : 'inactive'}`}>
-              {user.is_active ? 'Active' : 'Inactive'}
-            </p>
+          <div className="account-details">
+            <div className="info-group">
+              <label>Account Status</label>
+              <p className={`status ${user.is_active ? 'active' : 'inactive'}`}>
+                {user.is_active ? 'Active' : 'Inactive'}
+              </p>
+            </div>
+            <div className="info-group">
+              <label>Email Verification</label>
+              <p className={`status ${user.is_verified ? 'verified' : 'unverified'}`}>
+                {user.is_verified ? 'Verified' : 'Not Verified'}
+              </p>
+            </div>
           </div>
-          <div className="info-group">
-            <label>Email Verification</label>
-            <p className={`status ${user.is_verified ? 'verified' : 'unverified'}`}>
-              {user.is_verified ? 'Verified' : 'Not Verified'}
-            </p>
-          </div>
+          
+          {/* Subscription Info Component */}
+          <SubscriptionInfo />
+          
           <button onClick={handleLogout} className="logout-button">
             Sign Out
           </button>

@@ -4,6 +4,7 @@ import raw from "nanohtml/raw";
 import { QuillDrejtshkruaj } from "./quillDrejtshkruaj";
 import { MatchesEntity } from "../types";
 import type Quill from 'quill';
+import { updateTokenUsageFromResponse } from '../services/api';
 
 /**
  * Manager for popups.
@@ -249,7 +250,7 @@ export default class PopupManager {
                   style="display: flex; align-items: center; gap: 6px;"
                 >
                   <span style="font-size: 1.1em;">✖</span>
-                  <s>${text.slice(match.offset, match.offset + match.length)}</s>
+                  ${text.slice(match.offset, match.offset + match.length)}
                 </button>
               ` :
               match.suggestions?.slice(0, 3).map((suggestion) => {
@@ -329,7 +330,7 @@ export default class PopupManager {
     suggestions.forEach(suggestion => {
       if (suggestion.action === "delete") {
         // Display the word with strikethrough
-        console.log(`Strikethrough: <s>${suggestion.value}</s>`);
+        console.log(`Strikethrough: ${suggestion.value}`);
         
         // Replace the word with nothing (or remove it)
         // Assuming you have a method to update the text
@@ -630,6 +631,18 @@ export default class PopupManager {
         body: JSON.stringify(requestBody)
       });
 
+      // Handle authentication errors
+      if (response.status === 401) {
+        console.error("Authentication error: Unauthorized. Check if your cookie is being sent correctly");
+        // Clear token if unauthorized
+        localStorage.removeItem('drejtshkruaj_auth_token');
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 500);
+        throw new Error('Authentication failed. Please login again.');
+      }
+
       let data;
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
@@ -654,6 +667,14 @@ export default class PopupManager {
           dictionary: data.result.dictionary
         } : null
       });
+      
+      // Update token usage based on TST from response
+      if (data && typeof data === 'object' && data.TST !== undefined) {
+        console.log(`${action}API - Received TST:`, data.TST, typeof data.TST);
+        updateTokenUsageFromResponse(data.TST);
+      } else {
+        console.log(`${action}API - No TST in response:`, data);
+      }
       
       // Update the word info section with the response
       const wordInfoSection = document.querySelector('.word-info-section');

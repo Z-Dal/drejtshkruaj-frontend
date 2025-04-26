@@ -7,6 +7,7 @@ import PopupManager from "./PopupManager";
 import { DrejtshkruajApi, DrejtshkruajApiParams, MatchesEntity } from "../types";
 import LoadingIndicator from "./LoadingIndicator";
 import { TextChunker } from './TextChunker';
+import { updateTokenUsageFromResponse } from '../services/api';
 
 export type QuillDrejtshkruajParams = {
   server: string;
@@ -232,10 +233,25 @@ export class QuillDrejtshkruaj {
       
       if (response.status === 401) {
         console.error("Authentication error: Unauthorized. Check if your cookie is being sent correctly");
+        // Clear token if unauthorized
+        localStorage.removeItem('drejtshkruaj_auth_token');
+        // Redirect to login page after a short delay to allow console messages to be seen
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 500);
         return null;
       }
       
       const json = (await response.json()) as DrejtshkruajApi;
+      
+      // Update token usage based on TST from response
+      if (json && json.TST !== undefined) {
+        console.log('SpellingsAPI - Received TST:', json.TST, typeof json.TST);
+        updateTokenUsageFromResponse(json.TST);
+      } else {
+        console.log('SpellingsAPI - No TST in response:', json);
+      }
+      
       return json;
     } catch (e) {
       console.error("Error in getDrejtshkruajResults:", e);

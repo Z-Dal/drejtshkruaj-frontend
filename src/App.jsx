@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import ReactQuill, { Quill } from "react-quill";
 import "react-quill/dist/quill.snow.css"; // Import Quill's styles
@@ -8,6 +8,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import LoginPage from "./components/auth/LoginPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import MainLayout from "./components/layout/MainLayout";
+import { addTokenWidgetToEditor } from "./components/profile/EditorTokenWidget";
 
 
 registerQuillDrejtshkruaj(Quill);
@@ -23,6 +24,17 @@ const modules = {
 
 const Editor = () => {
   const [value, setValue] = React.useState("");
+  
+  useEffect(() => {
+    // Add token widget to the editor after it's initialized
+    // Use setTimeout to ensure the editor DOM is fully rendered
+    const timer = setTimeout(() => {
+      addTokenWidgetToEditor();
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
   return (
     <div className="appCss">
       <ReactQuill

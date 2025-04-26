@@ -10,15 +10,37 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
+      console.log('Checking authentication status...');
+      console.log('Current cookies:', document.cookie);
+      
+      // Check if there's a stored token in localStorage
+      const storedToken = localStorage.getItem('drejtshkruaj_auth_token');
+      console.log('Stored token exists:', !!storedToken);
+      
+      // Prepare headers
+      const headers = {};
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+      
       const response = await fetch('http://localhost:8000/users/me', {
         credentials: 'include',
+        headers
       });
+      
       if (response.ok) {
         const userData = await response.json();
+        console.log('Authentication successful, user data:', userData);
         setUser(userData);
         return true;
+      } else {
+        console.warn('Authentication check failed with status:', response.status);
+        // If unauthorized, clear any stale token
+        if (response.status === 401) {
+          localStorage.removeItem('drejtshkruaj_auth_token');
+        }
+        return false;
       }
-      return false;
     } catch (error) {
       console.error('Auth check failed:', error);
       return false;
@@ -28,7 +50,22 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    // Check authentication when the app loads
     checkAuth();
+    
+    // Add an event listener to check auth on focus (when returning to the tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAuth();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Clean up the event listener
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const login = async (username, password) => {
@@ -81,17 +118,42 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Get the stored token if it exists
+      const storedToken = localStorage.getItem('drejtshkruaj_auth_token');
+      
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (storedToken) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+      
       const response = await fetch('http://localhost:8000/auth/jwt/logout', {
         method: 'POST',
+        headers,
         credentials: 'include',
       });
       
+      // Clear the stored token regardless of the response
+      localStorage.removeItem('drejtshkruaj_auth_token');
+      
       if (response.ok) {
-        setUser(null);
-        navigate('/login');
+        console.log('Logout successful');
+      } else {
+        console.warn('Logout response not OK:', response.status);
       }
+      
+      // Always clear the user state and redirect
+      setUser(null);
+      navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
+      // Still clear the user state and token on error
+      localStorage.removeItem('drejtshkruaj_auth_token');
+      setUser(null);
+      navigate('/login');
     }
   };
 

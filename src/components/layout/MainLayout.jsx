@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import UserProfile from '../profile/UserProfile';
+import TokenStatsWidget from '../profile/TokenStatsWidget';
 import './MainLayout.css';
 
 const MainLayout = ({ children }) => {
@@ -10,6 +11,7 @@ const MainLayout = ({ children }) => {
       <div className="top-bar">
         <h1 className="app-title">Drejtshkruaj</h1>
         <div className="profile-section">
+          <TokenStatsWidget minimal={true} />
           <button 
             className="profile-toggle" 
             onClick={() => setIsProfileOpen(!isProfileOpen)}

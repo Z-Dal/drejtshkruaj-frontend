@@ -1,0 +1,63 @@
+.token-stats-container {
+  margin-top: 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding-top: 16px;
+}
+
+.token-stats-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.token-stats-content {
+  margin-bottom: 16px;
+}
+
+.token-stats-info {
+  margin-bottom: 12px;
+}
+
+.token-stats-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #555;
+}
+
+.token-stats-item .label {
+  color: #666;
+}
+
+.token-stats-item .value {
+  font-weight: 500;
+}
+
+.token-editor-progress-container {
+  height: 6px;
+  background-color: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.token-editor-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease-in-out;
+}
+
+.token-editor-progress-bar.good {
+  background-color: #4caf50;
+}
+
+.token-editor-progress-bar.low {
+  background-color: #ff9800;
+}
+
+.token-editor-progress-bar.critical {
+  background-color: #f44336;
+} 
