@@ -5,11 +5,17 @@ import "react-quill/dist/quill.snow.css"; // Import Quill's styles
 import "./App.css"
 import registerQuillDrejtshkruaj from "./quill/quillDrejtshkruaj"; // Correct import path
 import { AuthProvider } from "./auth/AuthContext";
-import LoginPage from "./components/auth/LoginPage";
+import SimpleLogin from "./SimpleLogin"; // Main login component
+import LoginPage from "./components/auth/LoginPage"; // Original login using AuthContext
+import AuthDebug from "./components/auth/AuthDebug";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import MainLayout from "./components/layout/MainLayout";
 import { addTokenWidgetToEditor } from "./components/profile/EditorTokenWidget";
 
+// Only import debug components when needed
+// import DirectLogin from "./debug/DirectLogin";
+// import LoginTest from "./debug/LoginTest";
+// import SimplestLoginForm from "./debug/SimplestLoginForm";
 
 registerQuillDrejtshkruaj(Quill);
 
@@ -52,7 +58,8 @@ function App() {
     <Router>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          {/* Main Routes */}
+          <Route path="/login" element={<SimpleLogin />} />
           <Route
             path="/"
             element={
@@ -63,6 +70,18 @@ function App() {
               </ProtectedRoute>
             }
           />
+          
+          {/* Debug Route - Keep only the essential ones */}
+          <Route path="/debug/auth" element={<AuthDebug />} />
+          <Route path="/debug/login-old" element={<LoginPage />} />
+          
+          {/* Uncomment these if you need to test with them again
+          <Route path="/debug/login-direct" element={<DirectLogin />} />
+          <Route path="/debug/login-test" element={<LoginTest />} />
+          <Route path="/debug/login-simple" element={<SimplestLoginForm />} />
+          */}
+          
+          {/* Fallback Route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

@@ -94,6 +94,14 @@
   font-size: 0.9rem;
 }
 
+.error-message.visible {
+  display: block;
+}
+
+.error-message.hidden {
+  display: none;
+}
+
 @media (max-width: 480px) {
   .login-container {
     margin: 1rem;

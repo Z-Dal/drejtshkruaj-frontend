@@ -70,12 +70,14 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
+      console.log('Login attempt started for:', username);
       const formData = new URLSearchParams();
       formData.append('username', username);
       formData.append('password', password);
       formData.append('grant_type', 'password');
       formData.append('scope', '');
       
+      console.log('Sending login request to backend...');
       const response = await fetch('http://localhost:8000/auth/jwt/login', {
         method: 'POST',
         headers: {
@@ -85,6 +87,19 @@ export const AuthProvider = ({ children }) => {
         credentials: 'include',
       });
 
+      console.log('Login response received:', {
+        status: response.status, 
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
+      // Check for unauthorized first
+      if (response.status === 401) {
+        console.log('Login failed: Unauthorized (401) - returning false');
+        return false;
+      }
+      
+      // Then check for success
       if (response.ok) {
         // Log cookies for debugging
         console.log('Cookies after login:', document.cookie);
@@ -100,18 +115,30 @@ export const AuthProvider = ({ children }) => {
           console.log('No JSON response with token');
         }
         
+        console.log('Checking authentication after successful login...');
         const success = await checkAuth();
+        console.log('checkAuth result:', success);
         if (success) {
+          console.log('Authentication successful, navigating to home');
           navigate('/');
           return true;
+        } else {
+          console.log('checkAuth failed after successful login response');
         }
       }
       
-      const errorData = await response.json().catch(() => null);
-      console.error('Login error:', errorData);
+      // For other error responses, try to parse error details if available
+      try {
+        const errorData = await response.json();
+        console.error('Login error details:', errorData);
+      } catch (e) {
+        console.error('Login failed with status:', response.status);
+      }
+      
+      console.log('Login failed, returning false');
       return false;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login exception:', error);
       return false;
     }
   };

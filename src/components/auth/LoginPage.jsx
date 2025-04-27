@@ -7,21 +7,64 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (isSubmitting) return;
+    
+    setIsSubmitting(true);
     setError('');
-
+    
+    // Create form data
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password);
+    formData.append('grant_type', 'password');
+    formData.append('scope', '');
+    
     try {
-      const success = await login(email, password);
-      if (!success) {
-        setError('Invalid email or password');
+      // Direct API call
+      const response = await fetch('http://localhost:8000/auth/jwt/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData,
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        // Success! Call the context login function
+        await login(email, password);
+        navigate('/');
+      } else {
+        // Error handling
+        if (response.status === 401 || response.status === 403) {
+          setError('Incorrect username or password');
+        } else if (response.status === 400) {
+          try {
+            const errorData = await response.json();
+            if (errorData.detail === 'LOGIN_BAD_CREDENTIALS') {
+              setError('Incorrect username or password');
+            } else {
+              setError(errorData.detail || `Login failed (Status ${response.status})`);
+            }
+          } catch (e) {
+            setError(`Login failed (Status ${response.status})`);
+          }
+        } else {
+          setError(`Login failed (Status ${response.status})`);
+        }
       }
     } catch (err) {
-      setError('An error occurred during login');
-      console.error('Login error:', err);
+      setError('Network error. Please try again.');
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -33,7 +76,24 @@ const LoginPage = () => {
             <h1>Welcome to Drejtshkruaj</h1>
             <p>Please sign in to continue</p>
           </div>
-          {error && <div className="error-message">{error}</div>}
+          
+          {/* Always show error container, just hide it when empty */}
+          <div 
+            style={{
+              display: error ? 'block' : 'none',
+              backgroundColor: '#ffdddd', 
+              color: '#d8000c',
+              padding: '10px 15px',
+              margin: '0 0 20px 0',
+              borderRadius: '4px',
+              border: '1px solid #d8000c',
+              fontWeight: 'bold',
+              textAlign: 'center'
+            }}
+          >
+            {error}
+          </div>
+          
           <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
               <label htmlFor="email">Email</label>
@@ -44,6 +104,7 @@ const LoginPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
+                disabled={isSubmitting}
               />
             </div>
             <div className="form-group">
@@ -55,10 +116,15 @@ const LoginPage = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
+                disabled={isSubmitting}
               />
             </div>
-            <button type="submit" className="login-button">
-              Sign In
+            <button 
+              type="submit" 
+              className="login-button"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Signing In...' : 'Sign In'}
             </button>
           </form>
         </div>
