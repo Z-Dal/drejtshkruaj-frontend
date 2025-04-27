@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import UserProfile from '../profile/UserProfile';
 import TokenStatsWidget from '../profile/TokenStatsWidget';
+// import SpellingStats from '../sidebar/SpellingStats'; // Remove this import
 import './MainLayout.css';
 
 const MainLayout = ({ children }) => {
@@ -31,8 +32,21 @@ const MainLayout = ({ children }) => {
           )}
         </div>
       </div>
-      <div className="main-content">
-        {children}
+      <div className="content-area">
+        <div className="left-sidebar">
+          <p>Left Sidebar</p>
+        </div>
+        <div className="editor-area">
+          {children}
+        </div>
+        <div className="right-sidebar">
+          {/* Placeholder for stats panel content */}
+          {/* <SpellingStats /> */}
+           <p>Right Sidebar</p> 
+        </div>
+      </div>
+      <div className="bottom-bar">
+        <p>Bottom Bar</p>
       </div>
     </div>
   );

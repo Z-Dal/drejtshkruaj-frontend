@@ -31,14 +31,12 @@ const Editor = () => {
   const [value, setValue] = React.useState("");
   
   return (
-    <div className="appCss">
       <ReactQuill
         theme="snow"
         value={value}
         onChange={setValue}
         modules={modules}
       />
-    </div>
   );
 };
 

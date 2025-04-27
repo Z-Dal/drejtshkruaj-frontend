@@ -311,73 +311,71 @@ export class QuillDrejtshkruaj {
   }
 
   private setupLayout() {
-    // Get the original quill container and its parent
-    const quillElement = this.quill.container;
-    const originalParent = quillElement.parentNode;
+    // Find the target element where the stats should be placed
+    const sidebarTarget = document.querySelector('.right-sidebar');
 
-    // Create main container
-    const mainContainer = document.createElement('div');
-    mainContainer.className = 'appCss';
+    if (!sidebarTarget) {
+      console.error("QuillDrejtshkruaj Error: Could not find the .right-sidebar element in the DOM. Stats panel cannot be attached.");
+      return;
+    }
 
-    // Create editor wrapper
-    const editorWrapper = document.createElement('div');
-    editorWrapper.className = 'editor-wrapper';
-    editorWrapper.appendChild(quillElement);
+    // Clear any existing placeholder content in the sidebar
+    sidebarTarget.innerHTML = ''; 
 
-    // Create right stats panel
-    const rightStatsPanel = document.createElement('div');
-    rightStatsPanel.className = 'right-stats-panel';
-    rightStatsPanel.innerHTML = `
-      <div class="header">
-        <h3>VËREJTJET GJUHËSORE</h3>
-      </div>
-      <div class="stats-counter">
-        <div class="counter-item counter-spelling">
-          <div class="counter-label">
-            <span class="counter-dot"></span>
-            Drejtshkrimore
-          </div>
-          <div class="counter-value">0</div>
+    // Create the stats panel content (using a temporary div just to set innerHTML easily)
+    const statsContentHTML = `
+      <div class="right-stats-panel"> <!-- Add a wrapper class for styling if needed -->
+        <div class="header">
+          <h3>VËREJTJET GJUHËSORE</h3>
+          <!-- Add Edit button here if needed -->
         </div>
-        <div class="counter-item counter-grammar">
-          <div class="counter-label">
-            <span class="counter-dot"></span>
-            Gramatikore
+        <div class="stats-counter">
+          <div class="counter-item counter-spelling">
+            <div class="counter-label">
+              <span class="counter-dot"></span>
+              Drejtshkrimore
+            </div>
+            <div class="counter-value">0</div>
           </div>
-          <div class="counter-value">0</div>
-        </div>
-        <div class="counter-item counter-punctuation">
-          <div class="counter-label">
-            <span class="counter-dot"></span>
-            Pikësimi
+          <div class="counter-item counter-grammar">
+            <div class="counter-label">
+              <span class="counter-dot"></span>
+              Gramatikore
+            </div>
+            <div class="counter-value">0</div>
           </div>
-          <div class="counter-value">0</div>
-        </div>
-        <div class="counter-item counter-total">
-          <div class="counter-label">Gjithsej</div>
-          <div class="counter-value">0</div>
+          <div class="counter-item counter-punctuation">
+            <div class="counter-label">
+              <span class="counter-dot"></span>
+              Pikësimi
+            </div>
+            <div class="counter-value">0</div>
+          </div>
+          <div class="counter-item counter-total">
+            <div class="counter-label">Gjithsej</div>
+            <div class="counter-value">0</div>
+          </div>
         </div>
       </div>
     `;
 
-    if (originalParent) {
-      // Add editor first, then stats panel
-      mainContainer.appendChild(editorWrapper);
-      mainContainer.appendChild(rightStatsPanel);
-      originalParent.appendChild(mainContainer);
-    }
+    // Inject the stats panel HTML into the sidebar target
+    sidebarTarget.innerHTML = statsContentHTML;
+    
+    // Note: We are no longer manipulating the Quill container's position directly here.
+    // It's assumed React places the Quill editor correctly within the .editor-area.
   }
 
   public updateStats() {
     const spellingCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('drejtshkrimore')).length;
     const grammarCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('gramatikore')).length;
-    const punctuationCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('pikë')).length;
+    const punctuationCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('pikë')).length; // Assuming 'pikë' for punctuation
 
-    // Update the DOM elements in the right stats panel
-    const spellingCounter = document.querySelector('.counter-spelling .counter-value');
-    const grammarCounter = document.querySelector('.counter-grammar .counter-value');
-    const punctuationCounter = document.querySelector('.counter-punctuation .counter-value');
-    const totalCounter = document.querySelector('.counter-total .counter-value');
+    // Update the DOM elements IN THE SIDEBAR
+    const spellingCounter = document.querySelector('.right-sidebar .counter-spelling .counter-value');
+    const grammarCounter = document.querySelector('.right-sidebar .counter-grammar .counter-value');
+    const punctuationCounter = document.querySelector('.right-sidebar .counter-punctuation .counter-value');
+    const totalCounter = document.querySelector('.right-sidebar .counter-total .counter-value');
 
     if (spellingCounter) spellingCounter.textContent = spellingCount.toString();
     if (grammarCounter) grammarCounter.textContent = grammarCount.toString();

@@ -4,6 +4,12 @@
   padding: 0;
 }
 
+html,
+body {
+  overflow: hidden; /* Prevent window scrollbars */
+  height: 100%; /* Ensure body takes full height */
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -21,7 +27,8 @@ code {
 }
 
 #root {
-  min-height: 100vh;
+  /* min-height: 100vh; */ /* Remove this, height: 100% is better */
+  height: 100%;
 }
 
 input,
