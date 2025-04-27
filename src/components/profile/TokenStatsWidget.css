@@ -112,4 +112,37 @@
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.token-widget-circular {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.token-circular-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.token-circular-avatar {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 40px;
+  height: 40px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.token-circular-avatar .profile-avatar {
+  border: none !important;
+  box-shadow: none !important;
 } 

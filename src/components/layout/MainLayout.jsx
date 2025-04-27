@@ -11,12 +11,12 @@ const MainLayout = ({ children }) => {
       <div className="top-bar">
         <h1 className="app-title">Drejtshkruaj</h1>
         <div className="profile-section">
-          <TokenStatsWidget minimal={true} />
           <button 
             className="profile-toggle" 
             onClick={() => setIsProfileOpen(!isProfileOpen)}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
           >
-            <UserProfile minimal={true} />
+            <TokenStatsWidget minimal={true} />
           </button>
           {isProfileOpen && (
             <div className="profile-dropdown">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getUserTokenUsage } from '../../services/api';
 import './TokenStatsWidget.css';
+import UserProfile from './UserProfile';
 
 const TokenStatsWidget = ({ minimal = true }) => {
   const [tokenUsage, setTokenUsage] = useState(null);
@@ -53,15 +54,49 @@ const TokenStatsWidget = ({ minimal = true }) => {
   const tokenStatus = percentUsed > 80 ? 'critical' : percentUsed > 50 ? 'low' : 'good';
 
   if (minimal) {
+    const radius = 24;
+    const stroke = 4;
+    const normalizedRadius = radius - stroke / 2;
+    const circumference = normalizedRadius * 2 * Math.PI;
+    const percent = Math.min(100, percentUsed);
+    const progress = circumference - (percent / 100) * circumference;
+
     return (
-      <div className="token-widget-mini" title={`${Math.max(0, tokenUsage.remaining_tokens)} tokens remaining today`}>
-        <div className="token-mini-progress">
-          <div 
-            className={`token-mini-bar ${tokenStatus}`} 
-            style={{ width: `${Math.min(100, percentUsed)}%` }}
-          ></div>
+      <div className="token-widget-circular">
+        <svg
+          height={radius * 2}
+          width={radius * 2}
+          className="token-circular-progress"
+        >
+          <circle
+            stroke="#e0e0e0"
+            fill="transparent"
+            strokeWidth={stroke}
+            r={normalizedRadius}
+            cx={radius}
+            cy={radius}
+          />
+          <circle
+            stroke={
+              tokenStatus === 'critical'
+                ? '#f44336'
+                : tokenStatus === 'low'
+                ? '#ff9800'
+                : '#4caf50'
+            }
+            fill="transparent"
+            strokeWidth={stroke}
+            strokeDasharray={circumference + ' ' + circumference}
+            strokeDashoffset={progress}
+            r={normalizedRadius}
+            cx={radius}
+            cy={radius}
+            style={{ transition: 'stroke-dashoffset 0.5s' }}
+          />
+        </svg>
+        <div className="token-circular-avatar">
+          <UserProfile minimal={true} />
         </div>
-        <span className="token-mini-count">{Math.max(0, tokenUsage.remaining_tokens)}</span>
       </div>
     );
   }
