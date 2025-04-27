@@ -9,7 +9,13 @@ const MainLayout = ({ children }) => {
   return (
     <div className="main-layout">
       <div className="top-bar">
-        <h1 className="app-title">Drejtshkruaj</h1>
+        <h1 className="app-title">
+          drejt<span style={{ 
+            color: '#f44336', 
+            textDecoration: 'underline',
+            textDecorationColor: '#f44336'
+          }}>shkruaj</span>
+        </h1>
         <div className="profile-section">
           <button 
             className="profile-toggle" 

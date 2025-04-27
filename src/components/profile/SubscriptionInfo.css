@@ -77,4 +77,34 @@
   font-size: 14px;
   background-color: #ffebee;
   border-radius: 4px;
+}
+
+/* Token Usage */
+.token-usage-header {
+  margin-top: 20px;
+}
+
+.token-progress-container {
+  height: 6px;
+  background-color: #e9ecef;
+  border-radius: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.token-progress-bar {
+  height: 100%;
+  background-color: #007bff;
+  border-radius: 3px;
+  transition: width 0.3s ease-in-out;
+}
+
+/* When tokens are getting low */
+.token-progress-bar.low {
+  background-color: #ff9800;
+}
+
+/* When tokens are almost gone */
+.token-progress-bar.critical {
+  background-color: #f44336;
 } 

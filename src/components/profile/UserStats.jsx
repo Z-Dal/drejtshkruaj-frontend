@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { getUserTokenUsage, getUserSubscription } from '../../services/api';
+import { getUserSubscription } from '../../services/api';
 import './UserStats.css';
 
 const UserStats = () => {
-  const [tokenUsage, setTokenUsage] = useState(null);
   const [subscription, setSubscription] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -12,12 +11,7 @@ const UserStats = () => {
     const fetchUserStats = async () => {
       try {
         setLoading(true);
-        const [usageData, subscriptionData] = await Promise.all([
-          getUserTokenUsage(),
-          getUserSubscription()
-        ]);
-        
-        setTokenUsage(usageData);
+        const subscriptionData = await getUserSubscription();
         setSubscription(subscriptionData);
         setError(null);
       } catch (err) {
@@ -46,34 +40,6 @@ const UserStats = () => {
 
   return (
     <div className="user-stats-container">
-      <div className="stats-card token-usage">
-        <h3>Token Usage</h3>
-        {tokenUsage && (
-          <div className="stats-content">
-            <div className="stats-item">
-              <span>Daily Limit:</span>
-              <span className="stats-value">{tokenUsage.daily_token_limit}</span>
-            </div>
-            <div className="stats-item">
-              <span>Used Today:</span>
-              <span className="stats-value">{Math.min(Math.max(0, tokenUsage.tokens_used_today), tokenUsage.daily_token_limit)}</span>
-            </div>
-            <div className="stats-item">
-              <span>Remaining:</span>
-              <span className="stats-value">{Math.max(0, tokenUsage.remaining_tokens)}</span>
-            </div>
-            <div className="token-progress-container">
-              <div 
-                className="token-progress-bar" 
-                style={{ 
-                  width: `${Math.min(100, (tokenUsage.tokens_used_today / tokenUsage.daily_token_limit) * 100)}%` 
-                }}
-              ></div>
-            </div>
-          </div>
-        )}
-      </div>
-
       <div className="stats-card subscription">
         <h3>Subscription</h3>
         {subscription && (

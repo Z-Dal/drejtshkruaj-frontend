@@ -1,28 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { getUserSubscription } from '../../services/api';
+import { getUserSubscription, getUserTokenUsage } from '../../services/api';
 import './SubscriptionInfo.css';
 
 const SubscriptionInfo = () => {
   const [subscription, setSubscription] = useState(null);
+  const [tokenUsage, setTokenUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchSubscription = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const subscriptionData = await getUserSubscription();
+        const [subscriptionData, tokenData] = await Promise.all([
+          getUserSubscription(),
+          getUserTokenUsage()
+        ]);
         setSubscription(subscriptionData);
+        setTokenUsage(tokenData);
         setError(null);
       } catch (err) {
-        console.error('Error fetching subscription:', err);
+        console.error('Error fetching subscription data:', err);
         setError('Failed to load subscription information.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSubscription();
+    fetchData();
+    
+    // Listen for token usage updates from API responses
+    const handleTokenUsageUpdate = (event) => {
+      setTokenUsage(event.detail);
+    };
+    
+    document.addEventListener('token-usage-updated', handleTokenUsageUpdate);
+    
+    return () => {
+      document.removeEventListener('token-usage-updated', handleTokenUsageUpdate);
+    };
   }, []);
 
   if (loading) {
@@ -87,6 +103,35 @@ const SubscriptionInfo = () => {
           </span>
         </div>
       </div>
+      
+      {/* Token Usage Section */}
+      <div className="subscription-header token-usage-header">
+        <h3>Token Usage</h3>
+      </div>
+      {tokenUsage && (
+        <div className="subscription-content token-usage-content">
+          <div className="subscription-info-row">
+            <span className="subscription-label">Daily Limit:</span>
+            <span className="subscription-value">{tokenUsage.daily_token_limit}</span>
+          </div>
+          <div className="subscription-info-row">
+            <span className="subscription-label">Used Today:</span>
+            <span className="subscription-value">{Math.min(Math.max(0, tokenUsage.tokens_used_today), tokenUsage.daily_token_limit)}</span>
+          </div>
+          <div className="subscription-info-row">
+            <span className="subscription-label">Remaining:</span>
+            <span className="subscription-value">{Math.max(0, tokenUsage.remaining_tokens)}</span>
+          </div>
+          <div className="token-progress-container">
+            <div 
+              className="token-progress-bar" 
+              style={{ 
+                width: `${Math.min(100, (tokenUsage.tokens_used_today / tokenUsage.daily_token_limit) * 100)}%` 
+              }}
+            ></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

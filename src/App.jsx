@@ -10,7 +10,6 @@ import LoginPage from "./components/auth/LoginPage"; // Original login using Aut
 import AuthDebug from "./components/auth/AuthDebug";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import MainLayout from "./components/layout/MainLayout";
-import { addTokenWidgetToEditor } from "./components/profile/EditorTokenWidget";
 
 // Only import debug components when needed
 // import DirectLogin from "./debug/DirectLogin";
@@ -30,16 +29,6 @@ const modules = {
 
 const Editor = () => {
   const [value, setValue] = React.useState("");
-  
-  useEffect(() => {
-    // Add token widget to the editor after it's initialized
-    // Use setTimeout to ensure the editor DOM is fully rendered
-    const timer = setTimeout(() => {
-      addTokenWidgetToEditor();
-    }, 1000);
-    
-    return () => clearTimeout(timer);
-  }, []);
   
   return (
     <div className="appCss">

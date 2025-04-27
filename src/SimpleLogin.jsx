@@ -74,127 +74,233 @@ function SimpleLogin() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+      background: '#f0f2f5',
+      padding: '20px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
     }}>
       <div style={{
         width: '100%',
-        maxWidth: '400px',
-        padding: '40px',
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.08)',
-        transition: 'all 0.3s ease'
+        maxWidth: '980px',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '40px',
+        padding: '20px'
       }}>
-        <h1 style={{ 
-          textAlign: 'center', 
-          marginBottom: '10px', 
-          fontSize: '28px', 
-          fontWeight: '600',
-          color: '#333'
-        }}>Welcome to Drejtshkruaj</h1>
-        
-        <p style={{ 
-          textAlign: 'center', 
-          color: '#666', 
-          marginBottom: '30px',
-          fontSize: '16px'
-        }}>Please sign in to continue</p>
-
-        {/* Error message as plain text */}
-        {errorMessage && (
-          <p style={{
-            color: '#d32f2f',
-            marginBottom: '20px',
-            textAlign: 'center',
-            fontWeight: '500',
-            fontSize: '14px'
+        {/* Left Column */}
+        <div style={{
+          flex: '1.2',
+          paddingRight: '40px'
+        }}>
+          <h1 style={{ 
+            color: '#1877f2',
+            fontSize: '4rem',
+            fontWeight: 'bold',
+            marginBottom: '16px',
+            fontFamily: 'Helvetica Neue, Helvetica, Arial, sans-serif',
+            textAlign: 'left'
           }}>
-            {errorMessage}
+            drejt<span style={{ 
+              color: '#f44336', 
+              textDecoration: 'underline',
+              textDecorationColor: '#f44336'
+            }}>shkruaj</span>
+          </h1>
+          
+          <p style={{ 
+            fontSize: '28px',
+            fontWeight: 'normal',
+            color: '#1c1e21',
+            marginBottom: '32px',
+            lineHeight: '1.3'
+          }}>
+            Shruaj shqip dhe pa gabime
           </p>
-        )}
-
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ 
-              display: 'block', 
-              marginBottom: '8px', 
-              fontWeight: '500',
-              fontSize: '14px',
-              color: '#555'
-            }}>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '1px solid #e1e1e1',
-                borderRadius: '8px',
-                fontSize: '16px',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
-                outline: 'none',
-                ':focus': {
-                  borderColor: '#007bff'
-                }
-              }}
-              required
-              disabled={isLoading}
-              placeholder="your@email.com"
-            />
+          
+          {/* Albanian Poem */}
+          <div style={{
+            marginTop: '32px',
+            padding: '24px',
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '8px',
+            borderLeft: '4px solid #f44336',
+            fontStyle: 'italic',
+            color: '#333',
+            lineHeight: '1.6',
+            maxWidth: '90%'
+          }}>
+            <p style={{ margin: 0, fontSize: '16px' }}>
+              Përmbi zâ qi lshon bylbyli<br/>
+              Gjûha shqype m'shungullon;<br/>
+              Permbi érë qi nep zymbyli<br/>
+              Pá da zêmren m'a ngushllon.<br/>
+              <br/>
+              Geg' e Toskë, malci, jallija<br/>
+              Jân nji kômb, m'u da s'duron:<br/>
+              Fund e maje nji â Shqypnija,<br/>
+              E nji gjuhë t'gjith na bashkon.<br/>
+              <span style={{
+                display: 'block',
+                marginTop: '8px',
+                fontStyle: 'normal',
+                color: '#1877f2',
+                fontSize: '14px',
+                textAlign: 'right',
+                fontWeight: 'bold'
+              }}>
+                - Gjergj Fishta, "Lahuta e Malcís"
+              </span>
+            </p>
           </div>
-
-          <div style={{ marginBottom: '30px' }}>
-            <label style={{ 
-              display: 'block', 
-              marginBottom: '8px', 
-              fontWeight: '500',
-              fontSize: '14px',
-              color: '#555'
-            }}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                border: '1px solid #e1e1e1',
-                borderRadius: '8px',
-                fontSize: '16px',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
-                outline: 'none'
-              }}
-              required
-              disabled={isLoading}
-              placeholder="••••••••"
-            />
+        </div>
+        
+        {/* Right Column - Login Box */}
+        <div style={{
+          flex: '1',
+          background: 'white',
+          padding: '24px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1)',
+          maxWidth: '400px',
+          width: '100%'
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <p style={{ 
+              margin: 0,
+              color: '#606770',
+              fontSize: '18px'
+            }}>
+              Korrigjimi i tekstit në shqip
+            </p>
           </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            style={{
-              width: '100%',
-              padding: '14px',
-              backgroundColor: '#4361ee',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '16px',
+          
+          {/* Error message */}
+          {errorMessage && (
+            <div style={{
+              backgroundColor: '#ffdddd', 
+              color: '#d8000c',
+              padding: '10px 15px',
+              margin: '0 0 20px 0',
+              borderRadius: '4px',
+              border: '1px solid #d8000c',
               fontWeight: 'bold',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              opacity: isLoading ? 0.7 : 1,
-              transition: 'background-color 0.2s',
-              boxShadow: '0 2px 10px rgba(67, 97, 238, 0.3)'
-            }}
-          >
-            {isLoading ? 'Signing In...' : 'Sign In'}
-          </button>
-        </form>
+              textAlign: 'center',
+              fontSize: '14px'
+            }}>
+              {errorMessage}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin}>
+            {/* Email Field */}
+            <div style={{ marginBottom: '16px' }}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  border: '1px solid #dddfe2',
+                  borderRadius: '6px',
+                  fontSize: '17px',
+                  boxSizing: 'border-box',
+                  outline: 'none'
+                }}
+                required
+                disabled={isLoading}
+                placeholder="Email or phone number"
+              />
+            </div>
+
+            {/* Password Field */}
+            <div style={{ marginBottom: '16px' }}>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  border: '1px solid #dddfe2',
+                  borderRadius: '6px',
+                  fontSize: '17px',
+                  boxSizing: 'border-box',
+                  outline: 'none'
+                }}
+                required
+                disabled={isLoading}
+                placeholder="Password"
+              />
+            </div>
+
+            {/* Login Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                padding: '14px',
+                backgroundColor: '#1877f2',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '20px',
+                fontWeight: '600',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.7 : 1,
+                marginTop: '8px'
+              }}
+            >
+              {isLoading ? 'Logging In...' : 'Log In'}
+            </button>
+            
+            {/* Forgot Password Link */}
+            <div style={{ 
+              textAlign: 'center', 
+              margin: '16px 0'
+            }}>
+              <a 
+                href="#" 
+                style={{ 
+                  color: '#1877f2',
+                  fontSize: '14px', 
+                  textDecoration: 'none'
+                }}
+              >
+                Forgot password?
+              </a>
+            </div>
+            
+            {/* Divider */}
+            <div style={{ 
+              borderBottom: '1px solid #dadde1',
+              margin: '20px 0'
+            }}></div>
+            
+            {/* Create Account Button */}
+            <div style={{ textAlign: 'center' }}>
+              <button
+                type="button"
+                style={{
+                  backgroundColor: '#42b72a',
+                  color: 'white',
+                  border: 'none',
+                  padding: '14px 16px',
+                  borderRadius: '6px',
+                  fontSize: '17px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'inline-block'
+                }}
+                onClick={() => window.location.href = '/register'}
+              >
+                Create new account
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

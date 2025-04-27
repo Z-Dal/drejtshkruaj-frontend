@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import './LoginPage.css';
 
@@ -71,10 +71,30 @@ const LoginPage = () => {
   return (
     <div className="login-page">
       <div className="login-container">
+        <div className="left-column">
+          <h1 className="app-logo">drejt<span>shkruaj</span></h1>
+          <p className="app-tagline">Shkrimi i saktë në shqip, një klikim larg.</p>
+          
+          <div className="poem-container">
+            <p>
+              Përmbi zâ qi lshon bylbyli<br/>
+              Gjûha shqype m'shungullon;<br/>
+              Permbi érë qi nep zymbyli<br/>
+              Pá da zêmren m'a ngushllon.<br/>
+              <br/>
+              Geg' e Toskë, malci, jallija<br/>
+              Jân nji kômb, m'u da s'duron:<br/>
+              Fund e maje nji â Shqypnija,<br/>
+              E nji gjuhë t'gjith na bashkon.<br/>
+              <b>- Gjergj Fishta, "Lahuta e Malcís"</b>
+            </p>
+          </div>
+        </div>
+        
         <div className="login-box">
           <div className="login-header">
             <h1>Welcome to Drejtshkruaj</h1>
-            <p>Please sign in to continue</p>
+            <p>Korrigjimi i tekstit në shqip</p>
           </div>
           
           {/* Always show error container, just hide it when empty */}
@@ -102,7 +122,7 @@ const LoginPage = () => {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
+                placeholder="Email or phone number"
                 required
                 disabled={isSubmitting}
               />
@@ -114,7 +134,7 @@ const LoginPage = () => {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                placeholder="Password"
                 required
                 disabled={isSubmitting}
               />
@@ -124,7 +144,21 @@ const LoginPage = () => {
               className="login-button"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Signing In...' : 'Sign In'}
+              {isSubmitting ? 'Logging In...' : 'Log In'}
+            </button>
+            
+            <div className="forgot-password">
+              <a href="#">Forgot password?</a>
+            </div>
+            
+            <div className="divider"></div>
+            
+            <button
+              type="button"
+              className="create-account-button"
+              onClick={() => navigate('/register')}
+            >
+              Create new account
             </button>
           </form>
         </div>
