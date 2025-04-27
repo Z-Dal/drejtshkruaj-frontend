@@ -30,15 +30,11 @@ export const updateTokenUsageFromResponse = (tst) => {
   // Make a copy of the cached data to avoid reference issues
   const updatedUsage = { ...cachedTokenUsage };
   
-  // REPLACE the tokens_used_today with TST instead of adding to it
-  // TST is the total tokens spent today, not the incremental amount
-  updatedUsage.tokens_used_today = numTST;
-  updatedUsage.remaining_tokens = updatedUsage.daily_token_limit - updatedUsage.tokens_used_today;
+  // Update tokens_used_today with TST, ensuring it doesn't exceed daily limit
+  updatedUsage.tokens_used_today = Math.min(numTST, updatedUsage.daily_token_limit);
   
-  // Ensure remaining tokens doesn't go below 0
-  if (updatedUsage.remaining_tokens < 0) {
-    updatedUsage.remaining_tokens = 0;
-  }
+  // Calculate remaining tokens, ensuring it doesn't go below 0
+  updatedUsage.remaining_tokens = Math.max(0, updatedUsage.daily_token_limit - updatedUsage.tokens_used_today);
   
   // Update the cache with the new values
   cachedTokenUsage = updatedUsage;

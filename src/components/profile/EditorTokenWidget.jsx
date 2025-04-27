@@ -39,11 +39,11 @@ export const addTokenWidgetToEditor = async () => {
         <div class="token-stats-info">
           <div class="token-stats-item">
             <span class="label">Remaining:</span>
-            <span class="value">${tokenUsage.remaining_tokens}</span>
+            <span class="value">${Math.max(0, tokenUsage.remaining_tokens)}</span>
           </div>
           <div class="token-stats-item">
             <span class="label">Used today:</span>
-            <span class="value">${tokenUsage.tokens_used_today}</span>
+            <span class="value">${Math.min(Math.max(0, tokenUsage.tokens_used_today), tokenUsage.daily_token_limit)}</span>
           </div>
           <div class="token-stats-item">
             <span class="label">Daily limit:</span>
@@ -74,8 +74,8 @@ export const addTokenWidgetToEditor = async () => {
       const usedEl = document.querySelector('.token-stats-info .token-stats-item:nth-child(2) .value');
       const progressBar = document.querySelector('.token-editor-progress-bar');
       
-      if (remainingEl) remainingEl.textContent = updatedUsage.remaining_tokens;
-      if (usedEl) usedEl.textContent = updatedUsage.tokens_used_today;
+      if (remainingEl) remainingEl.textContent = Math.max(0, updatedUsage.remaining_tokens);
+      if (usedEl) usedEl.textContent = Math.min(Math.max(0, updatedUsage.tokens_used_today), updatedUsage.daily_token_limit);
       if (progressBar) {
         progressBar.style.width = `${Math.min(100, updatedPercentUsed)}%`;
         progressBar.className = `token-editor-progress-bar ${updatedStatus}`;
@@ -96,8 +96,8 @@ export const addTokenWidgetToEditor = async () => {
         const usedEl = document.querySelector('.token-stats-info .token-stats-item:nth-child(2) .value');
         const progressBar = document.querySelector('.token-editor-progress-bar');
         
-        if (remainingEl) remainingEl.textContent = updatedUsage.remaining_tokens;
-        if (usedEl) usedEl.textContent = updatedUsage.tokens_used_today;
+        if (remainingEl) remainingEl.textContent = Math.max(0, updatedUsage.remaining_tokens);
+        if (usedEl) usedEl.textContent = Math.min(Math.max(0, updatedUsage.tokens_used_today), updatedUsage.daily_token_limit);
         if (progressBar) {
           progressBar.style.width = `${Math.min(100, updatedPercentUsed)}%`;
           progressBar.className = `token-editor-progress-bar ${updatedStatus}`;

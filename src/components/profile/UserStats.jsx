@@ -56,11 +56,11 @@ const UserStats = () => {
             </div>
             <div className="stats-item">
               <span>Used Today:</span>
-              <span className="stats-value">{tokenUsage.tokens_used_today}</span>
+              <span className="stats-value">{Math.min(Math.max(0, tokenUsage.tokens_used_today), tokenUsage.daily_token_limit)}</span>
             </div>
             <div className="stats-item">
               <span>Remaining:</span>
-              <span className="stats-value">{tokenUsage.remaining_tokens}</span>
+              <span className="stats-value">{Math.max(0, tokenUsage.remaining_tokens)}</span>
             </div>
             <div className="token-progress-container">
               <div 

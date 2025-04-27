@@ -54,14 +54,14 @@ const TokenStatsWidget = ({ minimal = true }) => {
 
   if (minimal) {
     return (
-      <div className="token-widget-mini" title={`${tokenUsage.remaining_tokens} tokens remaining today`}>
+      <div className="token-widget-mini" title={`${Math.max(0, tokenUsage.remaining_tokens)} tokens remaining today`}>
         <div className="token-mini-progress">
           <div 
             className={`token-mini-bar ${tokenStatus}`} 
             style={{ width: `${Math.min(100, percentUsed)}%` }}
           ></div>
         </div>
-        <span className="token-mini-count">{tokenUsage.remaining_tokens}</span>
+        <span className="token-mini-count">{Math.max(0, tokenUsage.remaining_tokens)}</span>
       </div>
     );
   }
@@ -73,7 +73,10 @@ const TokenStatsWidget = ({ minimal = true }) => {
       </div>
       <div className="token-widget-content">
         <div className="token-widget-data">
-          <span>{tokenUsage.remaining_tokens} / {tokenUsage.daily_token_limit}</span>
+          <span>{Math.max(0, tokenUsage.remaining_tokens)} / {tokenUsage.daily_token_limit}</span>
+        </div>
+        <div className="token-widget-data">
+          <span>Used today: {Math.min(Math.max(0, tokenUsage.tokens_used_today), tokenUsage.daily_token_limit)}</span>
         </div>
         <div className="token-progress">
           <div 
