@@ -10,9 +10,10 @@
 
 /* Top Bar - Keep existing styles, maybe adjust padding/height if needed */
 .top-bar {
-  background: white; /* Solid white background */
-  /* backdrop-filter: blur(10px); */ /* Remove blur for solid feel */
-  padding: 0.5rem 1.5rem; /* Slightly adjust padding */
+  background: #e3eafc;
+  border-bottom: 1px solid #e0e0e0;
+  color: #222;
+  padding: 0.4rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -21,9 +22,8 @@
   /* left: 0; */
   /* right: 0; */
   z-index: 1000;
-  color: #333;
-  border-bottom: 1px solid #dee2e6; /* Simple border */
-  /* box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); */ /* Remove shadow for cleaner look */
+  /* Remove old background and shadow styles */
+  /* box-shadow: none; */
 }
 
 /* Remove the gradient line */
@@ -71,80 +71,77 @@
 
 /* Main content area (holds sidebars + editor) */
 .content-area {
-  flex: 1; /* Take up remaining vertical space */
-  display: flex; /* Arrange sidebars and editor horizontally */
-  padding: 1rem; /* Add some padding around the content area */
-  gap: 1rem; /* Space between sidebars and editor */
-  overflow: hidden; /* Prevent content area itself from scrolling */
-  position: relative; /* Needed for absolute positioning of children */
+  position: relative;
+  display: flex;
+  flex: 1;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
-/* Left Sidebar */
+/* Left Sidebar: absolute, overlays content, slides in/out */
 .left-sidebar {
-  width: 250px; /* Adjust width as needed */
-  background-color: #fff; /* White background */
-  /* border: 1px solid #dee2e6; */ /* Remove explicit border */
-  border-radius: 8px; /* Rounded corners */
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 250px;
+  background: #f7f7f8;
+  border-radius: 8px 0 0 8px;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+  transition: transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
+  transform: translateX(0);
+  z-index: 20;
   padding: 1rem;
-  overflow-y: auto; /* Allow scrolling if content overflows */
-  transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease, visibility 0.3s ease; /* Add transitions */
-  opacity: 1;
-  visibility: visible;
-  position: relative; /* Positioning context for the button */
+  overflow-y: auto;
+}
+.left-sidebar.closed {
+  transform: translateX(-100%);
+  box-shadow: none;
 }
 
-/* Editor Area */
+/* Editor area should fill space between sidebars */
 .editor-area {
-  flex: 1; 
-  display: flex; 
-  flex-direction: column; 
-  background-color: #fff; 
-  /* border: 1px solid #dee2e6; */ /* Remove explicit border */
-  border-radius: 8px; 
-  overflow: hidden; 
+  flex: 1;
+  margin: 0 250px 0 250px; /* Default margin for open sidebars */
+  transition: margin 0.25s cubic-bezier(.4,0,.2,1);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-/* Quill Toolbar (within editor-area) */
-.editor-area .ql-toolbar {
-  /* flex-shrink: 0; */ /* Remove this, sticky positioning handles it */
-  position: sticky;
-  top: 0; /* Stick to the top of the scrolling container (.editor-area) */
-  z-index: 1; /* Stay above scrolling content */
-  background-color: #fff; /* Ensure background covers scrolling content */
-  border-bottom: 1px solid #dee2e6 !important; /* Ensure consistent border */
+/* Adjust margins when sidebars are closed */
+.left-sidebar.closed ~ .editor-area {
+  margin-left: 0;
+}
+.right-sidebar.closed ~ .editor-area {
+  margin-right: 0;
+}
+.left-sidebar.closed ~ .right-sidebar.closed ~ .editor-area {
+  margin: 0;
 }
 
-/* Quill Container (within editor-area) */
-.editor-area .ql-container {
-  flex-grow: 1; /* Allow container to take remaining space */
-  display: flex; /* Keep flex for editor */
-  flex-direction: column; /* Keep flex for editor */
-  /* overflow-y: auto; */ /* Remove this, parent .editor-area scrolls */
-  /* min-height: 0; */ /* Not needed if parent scrolls */
-  border: none !important; 
-}
-
-/* Quill Editor (within ql-container) */
-.editor-area .ql-editor {
-  flex-grow: 1; /* Allow editor to fill the container */
-  /* Overflow handled by .editor-area */
-  width: 100% !important; 
-  max-width: none !important; 
-  padding: 1rem !important; /* Keep padding */
-}
-
-/* Right Sidebar */
+/* Right Sidebar: absolute, overlays content, slides in/out */
 .right-sidebar {
-  width: 300px; /* Adjust width as needed */
-  background-color: #fff; /* White background */
-  /* border: 1px solid #dee2e6; */ /* Remove explicit border */
-  border-radius: 8px; /* Rounded corners */
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 300px;
+  background: #f7f7f8;
+  border-radius: 0 8px 8px 0;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.04);
+  transition: transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
+  transform: translateX(0);
+  z-index: 20;
   padding: 1rem;
-  overflow-y: auto; /* Allow scrolling if content overflows */
-  transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease, visibility 0.3s ease; /* Add transitions */
-  opacity: 1;
-  visibility: visible;
-  position: relative; /* Positioning context for the button */
+  overflow-y: auto;
+}
+.right-sidebar.closed {
+  transform: translateX(100%);
+  box-shadow: none;
 }
 
 /* Styles for closed sidebars */
@@ -160,13 +157,16 @@
 
 /* Bottom Bar */
 .bottom-bar {
-  background-color: #fff; /* White background */
+  background: #e3eafc;
+  border-top: 1px solid #e0e0e0;
+  color: #222;
   padding: 0.75rem 1.5rem;
-  border-top: 1px solid #dee2e6; /* Border */
   display: flex;
   justify-content: space-between;
   align-items: center;
   /* Add styles for buttons, word count etc. later */
+  /* Remove old background and shadow styles */
+  /* box-shadow: none; */
 }
 
 /* Remove unused old styles */
@@ -174,57 +174,35 @@
 /* .sidebar { ... } */
 /* .content { ... } */
 
-/* Shared styles for toggle buttons */
+/* Sidebar toggle buttons: vertical pill, flush with edge */
 .sidebar-toggle {
   position: absolute;
-  top: 1rem; /* Keep alignment */
-  z-index: 10; 
-  background-color: #fff; 
-  border: 1px solid #dee2e6;
-  border-radius: 4px; 
-  width: auto; 
-  height: auto;
-  padding: 0.3rem 0.4rem; 
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  background: #fff;
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 0.5rem 0.7rem;
   display: flex;
   align-items: center;
-  justify-content: center;
+  transition: background 0.2s, box-shadow 0.2s, left 0.25s cubic-bezier(.4,0,.2,1), right 0.25s cubic-bezier(.4,0,.2,1);
   color: #495057;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
-  /* Update transition to include left/right/transform */
-  transition: background-color 0.2s ease, left 0.3s ease, right 0.3s ease, transform 0.3s ease; 
-  /* Opacity no longer needed here, button always visible */
-  /* opacity: 1; */ 
+  width: 32px;
+  height: 48px;
+  justify-content: center;
 }
-
 .sidebar-toggle:hover {
-  background-color: #e9ecef;
+  background: #f4f4f5;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.10);
 }
-
-/* Default position and ORIENTATION for left toggle */
 .left-toggle {
-  left: 0.5rem; 
-  /* No flip needed, default state is correct for open */
-  transform: scaleX(1); 
+  left: 0;
+  border-radius: 0 16px 16px 0;
 }
-
-/* Position for left toggle when sidebar is OPEN */
-.left-toggle.open {
-  left: 250px; 
-  /* Orientation remains the same */
-  transform: scaleX(1); 
-}
-
-/* Default position and ORIENTATION for right toggle */
 .right-toggle {
-  right: 0.5rem; 
-  /* Flip needed, this orientation is correct for open */
-  transform: scaleX(-1); 
-}
-
-/* Position for right toggle when sidebar is OPEN */
-.right-toggle.open {
-  right: 300px; 
-  /* Orientation remains the same */
-  transform: scaleX(-1); 
+  right: 0;
+  border-radius: 16px 0 0 16px;
 } 

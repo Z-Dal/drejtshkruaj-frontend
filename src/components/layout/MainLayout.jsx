@@ -7,8 +7,8 @@ import './MainLayout.css';
 const SIDEBAR_BREAKPOINT = 1024; // Width below which sidebars close
 
 // Simple SVG Icon resembling the screenshot
-const SidebarToggleIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+const SidebarToggleIcon = ({ color }) => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="4" width="14" height="12" rx="1"/>
     <line x1="8" y1="4" x2="8" y2="16" />
   </svg>
@@ -70,40 +70,42 @@ const MainLayout = ({ children }) => {
       </div>
       {/* ADD Buttons inside content-area */} 
       <div className="content-area">
-        {/* Button is NOW a SIBLING to the sidebar */} 
+        {/* Left Sidebar Toggle Button - always visible, flush with left edge */}
         <button 
-           className={`sidebar-toggle left-toggle ${isLeftSidebarOpen ? 'open' : ''}`} // Add open class conditionally
-           onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
-           aria-label={isLeftSidebarOpen ? "Close Left Sidebar" : "Open Left Sidebar"}
-         >
-           <SidebarToggleIcon />
-         </button>
-
-        <div className={`left-sidebar ${!isLeftSidebarOpen ? 'closed' : ''}`}>
-           {/* Button REMOVED from inside */}
+          className="sidebar-toggle left-toggle"
+          onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+          aria-label={isLeftSidebarOpen ? "Close Left Sidebar" : "Open Left Sidebar"}
+        >
+          <SidebarToggleIcon color={isLeftSidebarOpen ? "#8e8ea0" : "#10a37f"} />
+        </button>
+        <div className={`left-sidebar ${!isLeftSidebarOpen ? 'closed' : ''}`}> 
            <p>Left Sidebar Content...</p>
         </div>
 
-        <div className="editor-area">
+        <div 
+          className="editor-area"
+          style={{
+            marginLeft: isLeftSidebarOpen ? 250 : 0,
+            marginRight: isRightSidebarOpen ? 300 : 0,
+            transition: 'margin 0.25s cubic-bezier(.4,0,.2,1)'
+          }}
+        >
           {children}
         </div>
         
-        <div className={`right-sidebar ${!isRightSidebarOpen ? 'closed' : ''}`}>
-            {/* Button REMOVED from inside */}
-            {/* Stats panel container remains */} 
+        <div className={`right-sidebar ${!isRightSidebarOpen ? 'closed' : ''}`}> 
            <div className="stats-panel-container">
                 {/* Content will be injected here */}
            </div>
         </div>
-        
-        {/* Button is NOW a SIBLING to the sidebar */} 
+        {/* Right Sidebar Toggle Button - always visible, flush with right edge */}
         <button 
-           className={`sidebar-toggle right-toggle ${isRightSidebarOpen ? 'open' : ''}`} // Add open class conditionally
-           onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
-           aria-label={isRightSidebarOpen ? "Close Right Sidebar" : "Open Right Sidebar"}
-         >
-           <SidebarToggleIcon />
-         </button>
+          className="sidebar-toggle right-toggle"
+          onClick={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
+          aria-label={isRightSidebarOpen ? "Close Right Sidebar" : "Open Right Sidebar"}
+        >
+          <SidebarToggleIcon color={isRightSidebarOpen ? "#8e8ea0" : "#10a37f"} />
+        </button>
 
       </div>
       <div className="bottom-bar">
