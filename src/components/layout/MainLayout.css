@@ -76,18 +76,21 @@
   padding: 1rem; /* Add some padding around the content area */
   gap: 1rem; /* Space between sidebars and editor */
   overflow: hidden; /* Prevent content area itself from scrolling */
+  position: relative; /* Needed for absolute positioning of children */
 }
 
 /* Left Sidebar */
 .left-sidebar {
   width: 250px; /* Adjust width as needed */
   background-color: #fff; /* White background */
-  border: 1px solid #dee2e6; /* Border */
+  /* border: 1px solid #dee2e6; */ /* Remove explicit border */
   border-radius: 8px; /* Rounded corners */
   padding: 1rem;
   overflow-y: auto; /* Allow scrolling if content overflows */
-  /* Remove fixed height, let flexbox handle height */
-  /* height: calc(100vh - 100px); */ 
+  transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease, visibility 0.3s ease; /* Add transitions */
+  opacity: 1;
+  visibility: visible;
+  position: relative; /* Positioning context for the button */
 }
 
 /* Editor Area */
@@ -96,10 +99,9 @@
   display: flex; 
   flex-direction: column; 
   background-color: #fff; 
-  border: 1px solid #dee2e6; 
+  /* border: 1px solid #dee2e6; */ /* Remove explicit border */
   border-radius: 8px; 
-  /* overflow: hidden; */ /* Remove this */
-  overflow-y: auto; /* Make the editor area scrollable again */
+  overflow: hidden; 
 }
 
 /* Quill Toolbar (within editor-area) */
@@ -135,12 +137,25 @@
 .right-sidebar {
   width: 300px; /* Adjust width as needed */
   background-color: #fff; /* White background */
-  border: 1px solid #dee2e6; /* Border */
+  /* border: 1px solid #dee2e6; */ /* Remove explicit border */
   border-radius: 8px; /* Rounded corners */
   padding: 1rem;
   overflow-y: auto; /* Allow scrolling if content overflows */
-   /* Remove fixed height, let flexbox handle height */
-  /* height: calc(100vh - 100px); */
+  transition: width 0.3s ease, padding 0.3s ease, opacity 0.3s ease, visibility 0.3s ease; /* Add transitions */
+  opacity: 1;
+  visibility: visible;
+  position: relative; /* Positioning context for the button */
+}
+
+/* Styles for closed sidebars */
+.left-sidebar.closed,
+.right-sidebar.closed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  opacity: 0;
+  overflow: hidden; /* Hide content when closed */
+  visibility: hidden; /* Hide completely */
 }
 
 /* Bottom Bar */
@@ -157,4 +172,59 @@
 /* Remove unused old styles */
 /* .main-content { ... } */
 /* .sidebar { ... } */
-/* .content { ... } */ 
+/* .content { ... } */
+
+/* Shared styles for toggle buttons */
+.sidebar-toggle {
+  position: absolute;
+  top: 1rem; /* Keep alignment */
+  z-index: 10; 
+  background-color: #fff; 
+  border: 1px solid #dee2e6;
+  border-radius: 4px; 
+  width: auto; 
+  height: auto;
+  padding: 0.3rem 0.4rem; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #495057;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); 
+  /* Update transition to include left/right/transform */
+  transition: background-color 0.2s ease, left 0.3s ease, right 0.3s ease, transform 0.3s ease; 
+  /* Opacity no longer needed here, button always visible */
+  /* opacity: 1; */ 
+}
+
+.sidebar-toggle:hover {
+  background-color: #e9ecef;
+}
+
+/* Default position and ORIENTATION for left toggle */
+.left-toggle {
+  left: 0.5rem; 
+  /* No flip needed, default state is correct for open */
+  transform: scaleX(1); 
+}
+
+/* Position for left toggle when sidebar is OPEN */
+.left-toggle.open {
+  left: 250px; 
+  /* Orientation remains the same */
+  transform: scaleX(1); 
+}
+
+/* Default position and ORIENTATION for right toggle */
+.right-toggle {
+  right: 0.5rem; 
+  /* Flip needed, this orientation is correct for open */
+  transform: scaleX(-1); 
+}
+
+/* Position for right toggle when sidebar is OPEN */
+.right-toggle.open {
+  right: 300px; 
+  /* Orientation remains the same */
+  transform: scaleX(-1); 
+} 

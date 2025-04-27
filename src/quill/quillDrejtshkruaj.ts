@@ -349,19 +349,19 @@ export class QuillDrejtshkruaj {
 
   private setupLayout() {
     // Find the target element where the stats should be placed
-    const sidebarTarget = document.querySelector('.right-sidebar');
+    const sidebarTarget = document.querySelector('.right-sidebar .stats-panel-container');
 
     if (!sidebarTarget) {
-      console.error("QuillDrejtshkruaj Error: Could not find the .right-sidebar element in the DOM. Stats panel cannot be attached.");
+      console.error("QuillDrejtshkruaj Error: Could not find the .stats-panel-container element within .right-sidebar. Stats panel cannot be attached.");
       return;
     }
 
-    // Clear any existing placeholder content in the sidebar
+    // Clear any existing placeholder content in the target container
     sidebarTarget.innerHTML = ''; 
 
-    // Create the stats panel content (using a temporary div just to set innerHTML easily)
+    // Create the stats panel content (HTML string remains the same)
     const statsContentHTML = `
-      <div class="right-stats-panel"> <!-- Add a wrapper class for styling if needed -->
+      <div class="right-stats-panel"> 
         <div class="header">
           <h3>VËREJTJET GJUHËSORE</h3>
           <!-- Add Edit button here if needed -->
@@ -396,19 +396,17 @@ export class QuillDrejtshkruaj {
       </div>
     `;
 
-    // Inject the stats panel HTML into the sidebar target
+    // Inject the stats panel HTML into the specific target container
     sidebarTarget.innerHTML = statsContentHTML;
     
-    // Note: We are no longer manipulating the Quill container's position directly here.
-    // It's assumed React places the Quill editor correctly within the .editor-area.
   }
 
   public updateStats() {
-    // Update the DOM elements IN THE SIDEBAR using the class properties
-    const spellingCounter = document.querySelector('.right-sidebar .counter-spelling .counter-value');
-    const grammarCounter = document.querySelector('.right-sidebar .counter-grammar .counter-value');
-    const punctuationCounter = document.querySelector('.right-sidebar .counter-punctuation .counter-value');
-    const totalCounter = document.querySelector('.right-sidebar .counter-total .counter-value');
+    // Selectors need to target elements within the container now
+    const spellingCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-spelling .counter-value');
+    const grammarCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-grammar .counter-value');
+    const punctuationCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-punctuation .counter-value');
+    const totalCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-total .counter-value');
 
     if (spellingCounter) spellingCounter.textContent = this.spellingCount.toString();
     if (grammarCounter) grammarCounter.textContent = this.grammarCount.toString();
