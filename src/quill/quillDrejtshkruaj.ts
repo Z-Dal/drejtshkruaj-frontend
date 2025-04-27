@@ -40,6 +40,11 @@ export class QuillDrejtshkruaj {
   public matches: MatchesEntity[] = [];
   private paragraphCache: Map<number, { text: string, startOffset: number }> = new Map();
 
+  // Add counters for stats
+  private spellingCount: number = 0;
+  private grammarCount: number = 0;
+  private punctuationCount: number = 0;
+
   constructor(public quill: Quill, public params: QuillDrejtshkruajParams) {
     debug("Attaching QuillDrejtshkruaj to Quill instance", quill);
 
@@ -81,6 +86,7 @@ export class QuillDrejtshkruaj {
       let changeStart = 0;
       let hasDelete = false;
       let textDeleted = false;
+      let matchesToRemove: MatchesEntity[] = []; // Keep track of matches removed in this delta
       
       // Calculate the affected range from delta ops
       delta.ops.forEach((op: any) => {
@@ -90,14 +96,16 @@ export class QuillDrejtshkruaj {
         if (op.delete) {
           hasDelete = true;
           textDeleted = true;
-          // For delete operations, immediately remove matches in the deleted range
           const deleteEnd = changeStart + op.delete;
-          this.matches = this.matches.filter(m => {
-            // Keep matches that don't overlap with the deleted range
-            return !(m.offset >= changeStart && m.offset < deleteEnd);
-          });
           
-          // Also, update offsets for matches after the deletion
+          // Identify matches within the deleted range BEFORE filtering
+          const removedInOp = this.matches.filter(m => m.offset >= changeStart && m.offset < deleteEnd);
+          matchesToRemove.push(...removedInOp);
+          
+          // Filter the main matches array
+          this.matches = this.matches.filter(m => !(m.offset >= changeStart && m.offset < deleteEnd));
+          
+          // Update offsets for matches AFTER the deletion
           this.matches.forEach(match => {
             if (match.offset >= deleteEnd) {
               match.offset -= op.delete;
@@ -134,24 +142,41 @@ export class QuillDrejtshkruaj {
       // Check if all text was deleted
       const currentText = this.quill.getText().trim();
       if (currentText === '' && textDeleted) {
-        // Clear all matches if text is empty
         this.matches = [];
-        hasDelete = true;
+        matchesToRemove = []; // No matches left to remove stats for
+        this.spellingCount = 0;
+        this.grammarCount = 0;
+        this.punctuationCount = 0;
+        hasDelete = true; // Ensure stats/boxes update below
       }
       
-      // If text was deleted, update the UI right away
+      // If text was deleted, update counts and UI right away
       if (hasDelete) {
-        // Immediately update stats
-        this.updateStats();
-        // Immediately update suggestion boxes
-        this.boxes.removeSuggestionBoxes();
-        this.boxes.addSuggestionBoxes();
+        // Decrement stats based on removed matches
+        matchesToRemove.forEach(m => {
+          if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
+          if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount--;
+          if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount--;
+        });
+        // Ensure counts don't go below zero
+        this.spellingCount = Math.max(0, this.spellingCount);
+        this.grammarCount = Math.max(0, this.grammarCount);
+        this.punctuationCount = Math.max(0, this.punctuationCount);
+
+        // Immediately update stats display
+        this.updateStats(); 
+        
+        // Call the NEW method to remove ONLY the specific matches
+        if (matchesToRemove.length > 0) {
+          this.boxes.removeMatches(matchesToRemove);
+        }
       }
     }
 
+    // Set cooldown for the full check (which will recalculate counts and re-add boxes)
     this.typingCooldown = setTimeout(() => {
       debug("User stopped typing, checking spelling");
-      this.checkSpelling();
+      this.checkSpelling(); // This needs to recalculate counts correctly
     }, this.params.cooldownTime);
   }
 
@@ -175,6 +200,12 @@ export class QuillDrejtshkruaj {
     
     console.log('Processing chunks:', chunks.length);
     
+    // Reset counts before recalculating from API results
+    this.spellingCount = 0;
+    this.grammarCount = 0;
+    this.punctuationCount = 0;
+    let currentMatches: MatchesEntity[] = []; // Build matches locally first
+
     for (const chunk of chunks) {
       const cachedEntry = this.paragraphCache.get(chunk.index);
       
@@ -207,33 +238,39 @@ export class QuillDrejtshkruaj {
         const json = await this.getDrejtshkruajResults(chunk.text);
         
         if (json && json.matches) {
-          // Remove old matches for this chunk's range
-          this.matches = this.matches.filter(m => !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset));
-          
-          // Add new matches with adjusted offsets
+          // Add new matches with adjusted offsets to the temporary list
           const adjustedMatches = json.matches.map(match => ({
             ...match,
             offset: match.offset + chunk.startOffset
           }));
-          
-          this.matches.push(...adjustedMatches);
-          
-          console.log('Updated matches for chunk:', {
-            newMatches: adjustedMatches.length,
-            totalMatches: this.matches.length
-          });
+          currentMatches.push(...adjustedMatches);
+        } else {
+          // If API fails or returns no matches for a chunk that existed before, 
+          // ensure we retain existing matches for that chunk from the cache logic if needed.
+          // (More complex logic might be needed here if API is unreliable)
         }
+      } else {
+         // If chunk is empty, ensure matches previously in this range are removed
+         // (This might need more careful handling based on cache logic)
       }
       
-      // Update cache for this paragraph with current text and new startOffset
+      // Update cache
       this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
-      
-      // Update suggestion boxes only for the current paragraph range
-      this.boxes.updateSuggestionBoxesForRange(chunk.startOffset, chunk.endOffset);
-      
-      // Update stats after processing each chunk
-      this.updateStats();
     }
+
+    // Replace old matches with the newly built list
+    this.matches = currentMatches;
+
+    // Recalculate counts based on the final matches list
+    this.matches.forEach(m => {
+      if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+      if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount++;
+      if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount++;
+    });
+
+    // Update boxes based on the final matches
+    this.boxes.removeSuggestionBoxes(); // Clear old ones first
+    this.boxes.addSuggestionBoxes();    // Add new ones
 
     // Final stats update at the end
     this.updateStats();
@@ -367,20 +404,16 @@ export class QuillDrejtshkruaj {
   }
 
   public updateStats() {
-    const spellingCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('drejtshkrimore')).length;
-    const grammarCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('gramatikore')).length;
-    const punctuationCount = this.matches.filter(m => m.shortMessage.toLowerCase().includes('pikë')).length; // Assuming 'pikë' for punctuation
-
-    // Update the DOM elements IN THE SIDEBAR
+    // Update the DOM elements IN THE SIDEBAR using the class properties
     const spellingCounter = document.querySelector('.right-sidebar .counter-spelling .counter-value');
     const grammarCounter = document.querySelector('.right-sidebar .counter-grammar .counter-value');
     const punctuationCounter = document.querySelector('.right-sidebar .counter-punctuation .counter-value');
     const totalCounter = document.querySelector('.right-sidebar .counter-total .counter-value');
 
-    if (spellingCounter) spellingCounter.textContent = spellingCount.toString();
-    if (grammarCounter) grammarCounter.textContent = grammarCount.toString();
-    if (punctuationCounter) punctuationCounter.textContent = punctuationCount.toString();
-    if (totalCounter) totalCounter.textContent = (spellingCount + grammarCount + punctuationCount).toString();
+    if (spellingCounter) spellingCounter.textContent = this.spellingCount.toString();
+    if (grammarCounter) grammarCounter.textContent = this.grammarCount.toString();
+    if (punctuationCounter) punctuationCounter.textContent = this.punctuationCount.toString();
+    if (totalCounter) totalCounter.textContent = (this.spellingCount + this.grammarCount + this.punctuationCount).toString();
   }
 
   // Add method to clear cache for a specific range

@@ -61,6 +61,50 @@ export class SuggestionBoxes {
   }
 
   /**
+   * Removes the formatting for a specific list of matches using a single Delta.
+   *
+   * @param matchesToRemove The matches whose highlights should be removed.
+   */
+  public removeMatches(matchesToRemove: MatchesEntity[]) {
+    if (!matchesToRemove || matchesToRemove.length === 0) {
+      return; // Nothing to remove
+    }
+
+    debug("Removing specific matches via Delta:", matchesToRemove.length);
+    this.parent.preventLoop(); // Prevent immediate re-check loops
+
+    const quill = this.parent.quill;
+    let delta = new Delta();
+    let currentIndex = 0;
+
+    // Sort matches by offset to process them in order
+    const sortedMatches = [...matchesToRemove].sort((a, b) => a.offset - b.offset);
+
+    sortedMatches.forEach(match => {
+       if (match.offset < currentIndex) {
+         // This might happen if matches overlap or offsets are weird after previous ops
+         // Skip this match to avoid delta errors, though this indicates a potential issue elsewhere
+         console.warn("Skipping overlapping/out-of-order match during removal:", match);
+         return;
+       }
+      // Retain up to the start of the match
+      delta.retain(match.offset - currentIndex);
+      // Retain the length of the match, but remove the format
+      delta.retain(match.length, { ltmatch: null }); // Use null to remove attribute
+      // Update the current index
+      currentIndex = match.offset + match.length;
+    });
+
+    // Apply the combined delta silently
+    if (delta.ops.length > 0) {
+        quill.updateContents(delta, 'silent');
+    }
+    
+    // Note: We don't need to update this.parent.matches here, 
+    // as that was already done in onTextChange before calling this method.
+  }
+
+  /**
    * Insert a suggestion box into the editor.
    *
    * This uses the matches stored in the parent class

@@ -21,6 +21,7 @@ registerQuillDrejtshkruaj(Quill);
 
 const modules = {
   Drejtshkruaj: {
+    cooldownTime: 750,
     apiOptions: {
       level: "picky",
     },
