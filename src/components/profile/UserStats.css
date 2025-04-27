@@ -72,7 +72,7 @@
 
 .token-progress-bar {
   height: 100%;
-  background-color: #007bff;
+  background-color: #ff9800;
   border-radius: 3px;
   transition: width 0.3s ease-in-out;
 }

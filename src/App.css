@@ -75,8 +75,8 @@ body {
 
 /* Right side panel - Statistics */
 .right-stats-panel {
-  width: 260px;
-  min-width: 260px;
+  width: 300px;
+  min-width: 300px;
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
