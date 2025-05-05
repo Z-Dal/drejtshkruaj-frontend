@@ -64,6 +64,9 @@ export class QuillDrejtshkruaj {
   // Track if the editor has been fully initialized and checked
   private hasInitialCheckCompleted: boolean = false;
 
+  // Track paragraphs that have been checked and haven't changed
+  private recentlyCheckedParagraphs: Set<number> = new Set();
+
   constructor(public quill: Quill, public params: QuillDrejtshkruajParams) {
     debug("Attaching QuillDrejtshkruaj to Quill instance", quill);
 
@@ -527,6 +530,10 @@ export class QuillDrejtshkruaj {
         
         // Update the UI for this paragraph only
         this.updateUIForParagraph(chunk);
+        
+        // Mark this paragraph as recently checked
+        this.recentlyCheckedParagraphs.add(chunk.index);
+        
         return;
       }
       
@@ -545,64 +552,71 @@ export class QuillDrejtshkruaj {
         console.log(`Received API response for chunk ${chunk.index}: ${json.matches ? json.matches.length : 0} matches`);
         
         if (json && json.matches) {
-          // Find old matches in this range to be removed
+          // Find existing matches in this range
           const matchesToRemove = this.matches.filter(m => 
             m.offset >= chunk.startOffset && m.offset < chunk.endOffset
           );
           
-          // Update stats counter for removed matches
-          matchesToRemove.forEach(m => {
-            if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
-            if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
-            if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
-          });
-          
-          // Remove old matches but ONLY from this range
-          if (matchesToRemove.length > 0) {
-            // Remove visual formatting for these specific matches
-            this.boxes.removeMatches(matchesToRemove);
-            
-            // Remove from the array
-            this.matches = this.matches.filter(m => 
-              !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-            );
-          }
-          
-          // Add new matches with adjusted offsets
-          const adjustedMatches = json.matches.map(match => ({
-            ...match,
-            originalOffset: match.offset,
-            offset: match.offset + chunk.startOffset
-          }));
-          
-          if (adjustedMatches.length > 0) {
-            console.log(`Adding ${adjustedMatches.length} adjusted matches for chunk ${chunk.index}`);
-            this.matches.push(...adjustedMatches);
-            
-            // Store in content cache
-            this.checkedContent.set(contentHash, {
-              timestamp: now,
-              matches: adjustedMatches
+          // Only process if we have new matches to add or existing ones to remove
+          // For rate limit errors, json.matches will be empty, so we won't remove existing matches
+          if (matchesToRemove.length > 0 || json.matches.length > 0) {
+            // Update stats counter for removed matches
+            matchesToRemove.forEach(m => {
+              if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
+              if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
+              if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
             });
             
-            // Update stats counter for new matches
-            adjustedMatches.forEach(m => {
-              if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-              if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-              if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-            });
+            // Remove the existing formatting for matches in this range
+            if (matchesToRemove.length > 0 && json.matches.length > 0) {
+              // Only remove existing matches if we have new ones to add
+              // This prevents clearing suggestions when rate limited
+              this.boxes.removeMatches(matchesToRemove);
+              
+              // Now remove from the matches array
+              this.matches = this.matches.filter(m => 
+                !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
+              );
+            }
             
-            // Apply formatting for these matches
-            adjustedMatches.forEach(match => {
-              this.boxes.addSuggestionBoxForMatch(match);
-            });
-          } else {
-            console.log(`No matches found for chunk ${chunk.index}`);
+            // Add new matches with adjusted offsets and store original offset for caching
+            if (json.matches.length > 0) {
+              const adjustedMatches = json.matches.map(match => ({
+                ...match,
+                originalOffset: match.offset, // Store original offset for future repositioning
+                offset: match.offset + chunk.startOffset
+              }));
+              
+              this.matches.push(...adjustedMatches);
+              
+              // Store in content cache
+              this.checkedContent.set(contentHash, {
+                timestamp: now,
+                matches: adjustedMatches
+              });
+              
+              // Update stats counter for new matches
+              adjustedMatches.forEach(m => {
+                if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+                if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
+                if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
+              });
+              
+              console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
+              
+              // Update highlights for this paragraph only
+              adjustedMatches.forEach(match => {
+                this.boxes.addSuggestionBoxForMatch(match);
+              });
+            }
           }
         }
         
         // Update cache
         this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
+        
+        // Mark this paragraph as recently checked
+        this.recentlyCheckedParagraphs.add(chunk.index);
         
         // Update UI for this paragraph only
         this.updateUIForParagraph(chunk);
@@ -834,6 +848,16 @@ export class QuillDrejtshkruaj {
         return;
       }
       
+      // Get content hash that's independent of paragraph position
+      const contentHash = this.getContentHash(chunk.text);
+      
+      // Check if this paragraph was recently checked (and its content didn't change)
+      const cachedParagraph = this.paragraphCache.get(chunk.index);
+      if (cachedParagraph && cachedParagraph.text === chunk.text && this.recentlyCheckedParagraphs.has(chunk.index)) {
+        console.log(`Paragraph ${chunk.index} was recently checked and content didn't change, skipping`);
+        return;
+      }
+      
       // Clear any existing debounce for this paragraph
       if (this.paragraphDebounces.has(chunk.index)) {
         clearTimeout(this.paragraphDebounces.get(chunk.index));
@@ -841,6 +865,7 @@ export class QuillDrejtshkruaj {
       
       // Set debounce to avoid rapid successive checks of the same paragraph
       this.paragraphDebounces.set(chunk.index, setTimeout(async () => {
+        // The rest of the implementation is the same as checkParagraphSpelling
         // Get content hash that's independent of paragraph position
         const contentHash = this.getContentHash(chunk.text);
         const cachedData = this.checkedContent.get(contentHash);
@@ -903,10 +928,8 @@ export class QuillDrejtshkruaj {
             
             const json = await this.getDrejtshkruajResults(chunk.text);
             
-            // If we hit a rate limit, the results will be an empty array
-            // In that case, don't clear existing matches - just skip processing
             if (json && json.matches) {
-              // Get existing matches in this range
+              // Find existing matches in this range
               const matchesToRemove = this.matches.filter(m => 
                 m.offset >= chunk.startOffset && m.offset < chunk.endOffset
               );
@@ -969,6 +992,9 @@ export class QuillDrejtshkruaj {
             // Update cache
             this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
             
+            // Mark this paragraph as recently checked
+            this.recentlyCheckedParagraphs.add(chunk.index);
+            
             // Update stats
             this.updateStats();
           } catch (error) {
@@ -1025,6 +1051,7 @@ export class QuillDrejtshkruaj {
   private clearCache() {
     this.paragraphCache.clear();
     this.checkedContent.clear();
+    this.recentlyCheckedParagraphs.clear();
   }
 
   // Improved clear cache for range to also invalidate content hash
@@ -1036,6 +1063,7 @@ export class QuillDrejtshkruaj {
       // If the chunk overlaps with [start, end], clear its cache entry
       if (!(chunk.endOffset < start || chunk.startOffset > end)) {
         this.paragraphCache.delete(chunk.index);
+        this.recentlyCheckedParagraphs.delete(chunk.index);
         
         // Also invalidate content hash
         const contentHash = this.getContentHash(chunk.text);
@@ -1363,56 +1391,66 @@ export class QuillDrejtshkruaj {
                 m.offset >= chunk.startOffset && m.offset < chunk.endOffset
               );
               
-              // Update stats counter for removed matches
-              matchesToRemove.forEach(m => {
-                if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
-                if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
-                if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
-              });
-              
-              // Remove the existing formatting for matches in this range
-              if (matchesToRemove.length > 0) {
-                // Remove these specific matches' formatting
-                this.boxes.removeMatches(matchesToRemove);
+              // Only process if we have new matches to add or existing ones to remove
+              // For rate limit errors, json.matches will be empty, so we won't remove existing matches
+              if (matchesToRemove.length > 0 || json.matches.length > 0) {
+                // Update stats counter for removed matches
+                matchesToRemove.forEach(m => {
+                  if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
+                  if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
+                  if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
+                });
                 
-                // Now remove from the matches array
-                this.matches = this.matches.filter(m => 
-                  !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-                );
+                // Remove the existing formatting for matches in this range
+                if (matchesToRemove.length > 0 && json.matches.length > 0) {
+                  // Only remove existing matches if we have new ones to add
+                  // This prevents clearing suggestions when rate limited
+                  this.boxes.removeMatches(matchesToRemove);
+                  
+                  // Now remove from the matches array
+                  this.matches = this.matches.filter(m => 
+                    !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
+                  );
+                }
+                
+                // Add new matches with adjusted offsets and store original offset for caching
+                if (json.matches.length > 0) {
+                  const adjustedMatches = json.matches.map(match => ({
+                    ...match,
+                    originalOffset: match.offset, // Store original offset for future repositioning
+                    offset: match.offset + chunk.startOffset
+                  }));
+                  
+                  this.matches.push(...adjustedMatches);
+                  
+                  // Store in content cache
+                  this.checkedContent.set(contentHash, {
+                    timestamp: now,
+                    matches: adjustedMatches
+                  });
+                  
+                  // Update stats counter for new matches
+                  adjustedMatches.forEach(m => {
+                    if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+                    if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
+                    if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
+                  });
+                  
+                  console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
+                  
+                  // Update highlights for this paragraph only
+                  adjustedMatches.forEach(match => {
+                    this.boxes.addSuggestionBoxForMatch(match);
+                  });
+                }
               }
-              
-              // Add new matches with adjusted offsets and store original offset for caching
-              const adjustedMatches = json.matches.map(match => ({
-                ...match,
-                originalOffset: match.offset, // Store original offset for future repositioning
-                offset: match.offset + chunk.startOffset
-              }));
-              
-              this.matches.push(...adjustedMatches);
-              
-              // Store in content cache
-              this.checkedContent.set(contentHash, {
-                timestamp: now,
-                matches: adjustedMatches
-              });
-              
-              // Update stats counter for new matches
-              adjustedMatches.forEach(m => {
-                if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-                if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-                if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-              });
-              
-              console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
-              
-              // Update highlights for this paragraph only
-              adjustedMatches.forEach(match => {
-                this.boxes.addSuggestionBoxForMatch(match);
-              });
             }
             
             // Update cache
             this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
+            
+            // Mark this paragraph as recently checked
+            this.recentlyCheckedParagraphs.add(chunk.index);
             
             // Update stats
             this.updateStats();
