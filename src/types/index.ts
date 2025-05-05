@@ -93,6 +93,7 @@ export interface MatchesEntity {
   length: number;
   contextWord?: string;
   insertPosition?: 'before' | 'after';
+  originalOffset?: number;
 }
 
 export type SpellingApiParams = {

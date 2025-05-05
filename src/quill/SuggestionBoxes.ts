@@ -74,34 +74,30 @@ export class SuggestionBoxes {
     this.parent.preventLoop(); // Prevent immediate re-check loops
 
     const quill = this.parent.quill;
-    let delta = new Delta();
-    let currentIndex = 0;
+    const text = quill.getText();
 
-    // Sort matches by offset to process them in order
-    const sortedMatches = [...matchesToRemove].sort((a, b) => a.offset - b.offset);
+    // Handle each match separately to be more precise
+    matchesToRemove.forEach(match => {
+      try {
+        // Verify the match still exists at the expected position
+        if (match.offset < 0 || match.offset + match.length > text.length) {
+          console.warn("Match offset out of bounds, skipping removal:", match);
+          return;
+        }
 
-    sortedMatches.forEach(match => {
-       if (match.offset < currentIndex) {
-         // This might happen if matches overlap or offsets are weird after previous ops
-         // Skip this match to avoid delta errors, though this indicates a potential issue elsewhere
-         console.warn("Skipping overlapping/out-of-order match during removal:", match);
-         return;
-       }
-      // Retain up to the start of the match
-      delta.retain(match.offset - currentIndex);
-      // Retain the length of the match, but remove the format
-      delta.retain(match.length, { ltmatch: null }); // Use null to remove attribute
-      // Update the current index
-      currentIndex = match.offset + match.length;
+        // Extra check: See if the match text has changed, if so we might not want to remove
+        const matchText = text.slice(match.offset, match.offset + match.length);
+        if (match.wordform && match.wordform !== matchText.trim()) {
+          console.log(`Text at match position has changed from "${match.wordform}" to "${matchText.trim()}", skipping removal`);
+          return;
+        }
+
+        // Apply the formatting removal just to this match
+        quill.formatText(match.offset, match.length, 'ltmatch', false, 'silent');
+      } catch (error) {
+        console.error('Error removing match formatting:', error, match);
+      }
     });
-
-    // Apply the combined delta silently
-    if (delta.ops.length > 0) {
-        quill.updateContents(delta, 'silent');
-    }
-    
-    // Note: We don't need to update this.parent.matches here, 
-    // as that was already done in onTextChange before calling this method.
   }
 
   /**
@@ -257,30 +253,87 @@ export class SuggestionBoxes {
         return;
       }
       
-      // Remove suggestion boxes formatting in the specified range (with error handling)
-      try {
-        this.parent.preventLoop();
-        this.parent.quill.formatText(startOffset, range, 'ltmatch', false, 'silent');
-      } catch (error) {
-        console.error('Error removing formatting in range:', error);
-        return; // If this fails, don't try to add new boxes
+      this.parent.preventLoop();
+      
+      const text = this.parent.quill.getText();
+      
+      // Find matches that need to be applied/reapplied in this range
+      const matchesInRange = this.parent.matches.filter(match => 
+        match && 
+        typeof match.offset === 'number' && 
+        typeof match.length === 'number' &&
+        match.offset >= startOffset && 
+        (match.offset + match.length) <= safeEndOffset
+      );
+      
+      // If no matches in this range, we don't need to do anything
+      if (matchesInRange.length === 0) {
+        return;
       }
       
-      // Add suggestion boxes for matches that are fully within the specified range
-      let addedCount = 0;
-      this.parent.matches.forEach(match => {
-        if (match && typeof match.offset === 'number' && typeof match.length === 'number' &&
-            match.offset >= startOffset && (match.offset + match.length) <= safeEndOffset) {
-          try {
-            this.addSuggestionBoxForMatch(match);
-            addedCount++;
-          } catch (error) {
-            console.error('Error adding suggestion box for match:', error, match);
+      // Get existing formatting in this range
+      const existingFormatting = [];
+      const contents = this.parent.quill.getContents(startOffset, range);
+      
+      if (contents && contents.ops) {
+        for (let i = 0; i < contents.ops.length; i++) {
+          const op = contents.ops[i];
+          if (op.attributes && op.attributes.ltmatch) {
+            existingFormatting.push(op.attributes.ltmatch);
           }
         }
-      });
+      }
       
-      console.log(`Updated suggestion boxes in range [${startOffset}, ${safeEndOffset}], added ${addedCount} boxes`);
+      // Only perform formatting if we have matches to apply or existing formatting to update
+      if (matchesInRange.length > 0 || existingFormatting.length > 0) {
+        // Remove any existing formatting only if we'll apply new formatting
+        // We're being careful not to remove formatting unnecessarily
+        this.parent.quill.formatText(startOffset, range, 'ltmatch', false, 'silent');
+        
+        // Apply formatting for each match individually
+        matchesInRange.forEach(match => {
+          try {
+            // Verify the text at the match position
+            const matchText = text.slice(match.offset, match.offset + match.length);
+            
+            // Only apply if the text matches or if there's no wordform to check against
+            if (matchText.trim() && (!match.wordform || matchText.trim() === match.wordform)) {
+              this.parent.quill.formatText(match.offset, match.length, 'ltmatch', match, 'silent');
+            } else if (match.wordform) {
+              // Try to find the exact word nearby if it has moved slightly
+              const searchStart = Math.max(0, match.offset - 20);
+              const searchEnd = Math.min(text.length, match.offset + match.length + 20);
+              const textToSearch = text.slice(searchStart, searchEnd);
+              
+              // Look for the exact wordform nearby
+              const wordIndex = textToSearch.indexOf(match.wordform);
+              if (wordIndex !== -1) {
+                const actualOffset = searchStart + wordIndex;
+                this.parent.quill.formatText(
+                  actualOffset, 
+                  match.wordform.length, 
+                  'ltmatch', 
+                  {...match, offset: actualOffset}, 
+                  'silent'
+                );
+                
+                // Update the match position in the parent's matches array
+                const matchIndex = this.parent.matches.findIndex(m => 
+                  m.offset === match.offset && m.length === match.length
+                );
+                if (matchIndex !== -1) {
+                  this.parent.matches[matchIndex].offset = actualOffset;
+                  this.parent.matches[matchIndex].length = match.wordform.length;
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error applying match formatting:', error, match);
+          }
+        });
+      }
+      
+      console.log(`Updated suggestion boxes in range [${startOffset}, ${safeEndOffset}], processed ${matchesInRange.length} matches`);
     } catch (error) {
       console.error('Error in updateSuggestionBoxesForRange:', error);
     }
@@ -301,18 +354,96 @@ export class SuggestionBoxes {
         console.warn('Match offset out of bounds:', match);
         return;
       }
+
+      // Check if format already exists at this position
+      let existingFormat: any = false;
+      try {
+        const formats = this.parent.quill.getFormat(match.offset, match.length);
+        existingFormat = formats && formats.ltmatch;
+      } catch (e) {
+        // Error getting format, continue without checking
+      }
+
+      // If format already exists and matches this match, don't reapply
+      if (existingFormat && 
+          existingFormat.offset === match.offset && 
+          existingFormat.length === match.length) {
+        return;
+      }
       
       // Get the exact text at the match position
       const matchText = text.slice(match.offset, match.offset + match.length);
       
-      // If the matched text has changed or is empty, don't apply formatting
+      // If the matched text has changed or is empty, try to find the actual word
       if (!matchText.trim()) {
         console.warn('Match text is empty or whitespace only:', match);
         return;
       }
 
-      // IMPORTANT: Verify the text doesn't contain spaces or unwanted word boundaries
-      // This prevents highlights from spanning across multiple words
+      // First try to apply the match directly if possible
+      if (!match.wordform || matchText.trim() === match.wordform) {
+        // Apply using Delta instead of formatText to be more precise
+        try {
+          const delta = new Delta()
+            .retain(match.offset)
+            .retain(match.length, { ltmatch: match });
+          
+          this.parent.quill.updateContents(delta, 'silent');
+          return;
+        } catch (err) {
+          console.error('Error applying match formatting with Delta:', err);
+          // Fall back to formatText if Delta fails
+          this.parent.quill.formatText(match.offset, match.length, 'ltmatch', match, 'silent');
+          return;
+        }
+      }
+      
+      // If we get here, the text at the original position doesn't match the expected wordform
+      // Let's try to find it nearby
+      const searchStart = Math.max(0, match.offset - 30);
+      const searchEnd = Math.min(text.length, match.offset + match.length + 30);
+      const textToSearch = text.slice(searchStart, searchEnd);
+      
+      const wordIndex = textToSearch.indexOf(match.wordform);
+      if (wordIndex !== -1) {
+        // Found the word nearby
+        const actualOffset = searchStart + wordIndex;
+        
+        // Update the match and apply formatting
+        const updatedMatch = {
+          ...match,
+          offset: actualOffset,
+          length: match.wordform.length
+        };
+        
+        // Apply formatting ONLY to this specific match without affecting others
+        try {
+          const delta = new Delta()
+            .retain(actualOffset)
+            .retain(match.wordform.length, { ltmatch: updatedMatch });
+          
+          this.parent.quill.updateContents(delta, 'silent');
+        } catch (err) {
+          console.error('Error applying updated match with Delta:', err);
+          // Fall back to formatText if Delta fails
+          this.parent.quill.formatText(actualOffset, match.wordform.length, 'ltmatch', updatedMatch, 'silent');
+        }
+        
+        // Update the match in the parent's array
+        const matchIndex = this.parent.matches.findIndex(m => 
+          m.offset === match.offset && 
+          m.length === match.length && 
+          this.isSameMatch(m, match)
+        );
+        
+        if (matchIndex !== -1) {
+          this.parent.matches[matchIndex] = updatedMatch;
+        }
+        
+        return;
+      }
+      
+      // For more complex cases like text with spaces, handle carefully
       if (/\s/.test(matchText)) {
         // Text contains spaces - find the first word only
         const firstWordMatch = matchText.match(/^[^\s]+/);
@@ -322,21 +453,50 @@ export class SuggestionBoxes {
             ...match,
             length: firstWordMatch[0].length
           };
-          // Apply formatting to just the first word
-          this.parent.quill.formatText(match.offset, adjustedMatch.length, 'ltmatch', adjustedMatch, 'silent');
-          console.log('Added suggestion box for partial match (first word only):', adjustedMatch);
+          
+          // Apply formatting to just the first word using Delta
+          try {
+            const delta = new Delta()
+              .retain(match.offset)
+              .retain(adjustedMatch.length, { ltmatch: adjustedMatch });
+            
+            this.parent.quill.updateContents(delta, 'silent');
+          } catch (err) {
+            console.error('Error applying adjusted match with Delta:', err);
+            // Fall back to formatText if Delta fails
+            this.parent.quill.formatText(match.offset, adjustedMatch.length, 'ltmatch', adjustedMatch, 'silent');
+          }
+          
+          // Update the match in the parent's array
+          const matchIndex = this.parent.matches.findIndex(m => 
+            m.offset === match.offset && 
+            m.length === match.length && 
+            this.isSameMatch(m, match)
+          );
+          
+          if (matchIndex !== -1) {
+            this.parent.matches[matchIndex] = adjustedMatch;
+          }
         }
       } else {
-        // Text is a single word - check if it ends at a word boundary
+        // Apply formatting to the match even if it doesn't perfectly match,
+        // as long as it's a valid word boundary
         const isWordBoundaryAfter = 
           match.offset + match.length >= text.length || 
           /[\s.,!?;:)\]}]/.test(text[match.offset + match.length]);
         
-        // Only apply formatting if at word boundary
         if (isWordBoundaryAfter) {
-          // Apply formatting to the match range
-          this.parent.quill.formatText(match.offset, match.length, 'ltmatch', match, 'silent');
-          console.log('Added suggestion box for match at offset', match.offset);
+          // Apply using Delta first, fall back to formatText
+          try {
+            const delta = new Delta()
+              .retain(match.offset)
+              .retain(match.length, { ltmatch: match });
+            
+            this.parent.quill.updateContents(delta, 'silent');
+          } catch (err) {
+            console.error('Error applying boundary match with Delta:', err);
+            this.parent.quill.formatText(match.offset, match.length, 'ltmatch', match, 'silent');
+          }
         } else {
           // Find the next word boundary
           let boundaryPos = match.offset;
@@ -350,19 +510,61 @@ export class SuggestionBoxes {
           // If we found a word boundary, adjust the match length
           if (boundaryPos > match.offset) {
             const adjustedLength = boundaryPos - match.offset;
-            this.parent.quill.formatText(match.offset, adjustedLength, 'ltmatch', {
+            const adjustedMatch = {
               ...match,
               length: adjustedLength
-            }, 'silent');
-            console.log('Added suggestion box with adjusted length:', adjustedLength);
-          } else {
-            console.warn('Skipping non-word-boundary match:', matchText);
+            };
+            
+            // Apply using Delta first, fall back to formatText
+            try {
+              const delta = new Delta()
+                .retain(match.offset)
+                .retain(adjustedLength, { ltmatch: adjustedMatch });
+              
+              this.parent.quill.updateContents(delta, 'silent');
+            } catch (err) {
+              console.error('Error applying boundary match with Delta:', err);
+              this.parent.quill.formatText(match.offset, adjustedLength, 'ltmatch', adjustedMatch, 'silent');
+            }
+            
+            // Update the match in the parent's array
+            const matchIndex = this.parent.matches.findIndex(m => 
+              m.offset === match.offset && 
+              m.length === match.length && 
+              this.isSameMatch(m, match)
+            );
+            
+            if (matchIndex !== -1) {
+              this.parent.matches[matchIndex] = adjustedMatch;
+            }
           }
         }
       }
     } catch (error) {
       console.error('Error adding suggestion box:', error);
     }
+  }
+
+  // Helper method to compare matches regardless of whether they have ID field
+  private isSameMatch(match1: any, match2: any): boolean {
+    // Same offset and length is a basic match
+    if (match1.offset === match2.offset && match1.length === match2.length) {
+      // If both have IDs, compare them
+      if (match1.id !== undefined && match2.id !== undefined) {
+        return match1.id === match2.id;
+      }
+      // If both have same message, consider them the same match
+      if (match1.message && match2.message) {
+        return match1.message === match2.message;
+      }
+      // If both have same wordform, consider them the same match
+      if (match1.wordform && match2.wordform) {
+        return match1.wordform === match2.wordform;
+      }
+      // Basic match is enough if no other identifiers
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -396,8 +598,26 @@ export class SuggestionBoxes {
         return;
       }
       
+      // IMPORTANT: Log which range we're removing
+      console.log(`Removing suggestion boxes in range [${startOffset}, ${safeEndOffset}]`);
+      
       this.parent.preventLoop();
-      this.parent.quill.formatText(startOffset, range, 'ltmatch', false, 'silent');
+      
+      // Get current matches in this range
+      const matchesInRange = this.parent.matches.filter(match => 
+        match && 
+        typeof match.offset === 'number' && 
+        match.offset >= startOffset && 
+        match.offset + match.length <= safeEndOffset
+      );
+      
+      // Remove formatting only for specific matches in this range to avoid disturbing other ranges
+      if (matchesInRange.length > 0) {
+        this.removeMatches(matchesInRange);
+      } else {
+        // If no specific matches found, then use formatText as a fallback
+        this.parent.quill.formatText(startOffset, range, 'ltmatch', false, 'silent');
+      }
     } catch (error) {
       console.error('Error in removeSuggestionBoxesInRange:', error);
     }
