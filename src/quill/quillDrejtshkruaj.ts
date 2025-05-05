@@ -66,6 +66,21 @@ export class QuillDrejtshkruaj {
 
   // Track paragraphs that have been checked and haven't changed
   private recentlyCheckedParagraphs: Set<number> = new Set();
+  
+  // Track the most recently sent paragraphs to prevent duplicates
+  private recentlySentParagraphs: Set<string> = new Set();
+  
+  // Track paragraph content with timestamps to prevent duplicates over longer periods
+  private paragraphContentTimestamps: Map<string, number> = new Map();
+  
+  // Track paragraph content hashes that have been processed in this session
+  private exactContentProcessed: Map<string, number> = new Map();
+  
+  // Global rate limiting for API calls
+  private lastApiCallTime: number = 0;
+  private apiCallCount: number = 0;
+  private readonly API_CALL_COOLDOWN: number = 1000; // 1 second between API calls
+  private readonly MAX_API_CALLS_PER_MINUTE: number = 30; // 30 calls per minute maximum
 
   constructor(public quill: Quill, public params: QuillDrejtshkruajParams) {
     debug("Attaching QuillDrejtshkruaj to Quill instance", quill);
@@ -234,16 +249,16 @@ export class QuillDrejtshkruaj {
             seenParagraphTexts.add(paragraphText);
             // Add this paragraph to the modified set
             modifiedParagraphs.add(paraStart);
+          
+          // For insert operations, calculate the length change
+          if (op.insert) {
+            const insertLength = typeof op.insert === 'string' ? op.insert.length : 1;
             
-            // For insert operations, calculate the length change
-            if (op.insert) {
-              const insertLength = typeof op.insert === 'string' ? op.insert.length : 1;
-              
               // Only update offsets for matches after the insertion point
               // But KEEP the matches - don't remove them
-              this.matches.forEach(match => {
-                if (match.offset >= changeStart) {
-                  match.offset += insertLength;
+            this.matches.forEach(match => {
+              if (match.offset >= changeStart) {
+                match.offset += insertLength;
                 } else if (match.offset < changeStart && 
                           match.offset + match.length > changeStart) {
                   // This match spans the insertion point - extend it
@@ -253,7 +268,7 @@ export class QuillDrejtshkruaj {
             }
             
             // Clear cache for this paragraph so it will be rechecked
-            this.clearCacheForRange(paraStart, paraEnd);
+          this.clearCacheForRange(paraStart, paraEnd);
           }
         }
       });
@@ -424,18 +439,14 @@ export class QuillDrejtshkruaj {
       
       // Get all paragraphs as chunks
       const chunks = TextChunker.getChunks(currentText);
-      
+    
       console.log(`Processing ${chunks.length} chunks for spelling check`);
-      
+    
       // Force initial stats to zero
       this.spellingCount = 0;
       this.grammarCount = 0;
       this.punctuationCount = 0;
-      
-      // Process chunks in batches to avoid overwhelming the API
-      let processed = 0;
-      const MAX_CONCURRENT = 3; // Process up to 3 chunks at a time
-      
+
       // If we have no chunks, there's nothing to process
       if (chunks.length === 0) {
         console.warn("No text chunks found to process!");
@@ -443,21 +454,17 @@ export class QuillDrejtshkruaj {
         return Promise.resolve();
       }
       
-      while (processed < chunks.length) {
-        // Get the next batch of chunks to process
-        const batch = chunks.slice(processed, processed + MAX_CONCURRENT);
-        console.log(`Processing batch of ${batch.length} chunks (${processed + 1}-${processed + batch.length} of ${chunks.length})`);
+      // Process chunks sequentially - one at a time
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        console.log(`Processing chunk ${i+1}/${chunks.length}`);
         
-        processed += batch.length;
+        // Process this chunk and wait for completion
+        await this.processChunk(chunk);
         
-        // Process this batch concurrently
-        const promises = batch.map(chunk => this.processChunk(chunk));
-        await Promise.all(promises);
-        
-        // Short delay between batches
-        if (processed < chunks.length) {
-          console.log(`Waiting before processing next batch...`);
-          await new Promise(resolve => setTimeout(resolve, 200));
+        // Add a small delay between chunks to ensure UI updates
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       
@@ -490,88 +497,67 @@ export class QuillDrejtshkruaj {
       
       console.log(`Processing chunk ${chunk.index} (${chunk.startOffset}-${chunk.endOffset}): "${trimmedText.substring(0, 30)}..."`);
       
-      // Only check this chunk if it hasn't been processed recently
+      // Get content hash
       const contentHash = this.getContentHash(chunk.text);
-      const cachedData = this.checkedContent.get(contentHash);
-      const now = Date.now();
       
-      // If recently checked, just reuse the results
-      if (cachedData && (now - cachedData.timestamp < 30000)) { 
-        console.log(`Using cached results for chunk ${chunk.index}: ${trimmedText.substring(0, 30)}...`);
+      // Get exact content hash for stricter deduplication
+      const exactHash = this.getExactContentHash(chunk.text);
+      
+      // Check if we've already processed this exact content
+      const lastProcessedTime = this.exactContentProcessed.get(exactHash);
+      if (lastProcessedTime) {
+        const now = Date.now();
+        const timeSinceLastProcessed = now - lastProcessedTime;
         
-        // Remove old matches in this range
-        const matchesToRemove = this.matches.filter(m => 
-          m.offset >= chunk.startOffset && m.offset < chunk.endOffset
-        );
-        
-        // Remove old matches from this range only
-        if (matchesToRemove.length > 0) {
-          this.boxes.removeMatches(matchesToRemove);
-          this.matches = this.matches.filter(m => 
-            !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-          );
+        // If we've processed this exact content within the last 10 seconds, skip it entirely
+        if (timeSinceLastProcessed < 10000) {
+          console.log(`Exact content processed ${timeSinceLastProcessed}ms ago, skipping: ${trimmedText.substring(0, 30)}...`);
+          return;
         }
-        
-        // Add cached matches with adjusted offsets
-        const adjustedMatches = cachedData.matches.map(match => ({
-          ...match,
-          offset: match.offset - (match.originalOffset || 0) + chunk.startOffset
-        }));
-        
-        // Add the cached matches
-        this.matches.push(...adjustedMatches);
-        
-        // Update UI with these cached matches
-        adjustedMatches.forEach(m => {
-          if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-          if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-          if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-        });
-        
-        // Update the UI for this paragraph only
-        this.updateUIForParagraph(chunk);
-        
-        // Mark this paragraph as recently checked
-        this.recentlyCheckedParagraphs.add(chunk.index);
-        
+      }
+
+      // Check if we just sent this exact text to the API (duplicate prevention)
+      if (this.recentlySentParagraphs.has(contentHash)) {
+        console.log(`Duplicate paragraph text detected, skipping: ${trimmedText.substring(0, 30)}...`);
         return;
       }
       
-      // Actually check this chunk
-      console.log(`Sending API request for chunk ${chunk.index} (length: ${chunk.text.length})`);
-      this.processingParagraphs.add(chunk.index);
+      // Check if we've processed this exact content recently (with longer timeout)
+      const now = Date.now();
+      const contentCacheTime = this.paragraphContentTimestamps.get(contentHash);
+      if (contentCacheTime && (now - contentCacheTime < 60000)) { // 60 second tracking
+        console.log(`Paragraph content processed recently, skipping duplicate: ${trimmedText.substring(0, 30)}...`);
+        return;
+      }
       
-      try {
-        const json = await this.getDrejtshkruajResults(chunk.text);
+      // Clear any existing debounce for this paragraph
+      if (this.paragraphDebounces.has(chunk.index)) {
+        clearTimeout(this.paragraphDebounces.get(chunk.index));
+      }
+      
+      // Set debounce to avoid rapid successive checks of the same paragraph
+      this.paragraphDebounces.set(chunk.index, setTimeout(async () => {
+        // The rest of the implementation is the same as checkParagraphSpelling
+        // Get content hash that's independent of paragraph position
+        const contentHash = this.getContentHash(chunk.text);
+        const cachedData = this.checkedContent.get(contentHash);
+        const now = Date.now();
         
-        if (!json) {
-          console.error(`API returned null for chunk ${chunk.index}`);
-          return;
-        }
-        
-        console.log(`Received API response for chunk ${chunk.index}: ${json.matches ? json.matches.length : 0} matches`);
-        
-        if (json && json.matches) {
+        // If we recently checked this exact content, reuse the results
+        if (cachedData && (now - cachedData.timestamp < 30000)) { // 30 second cache
+          console.log(`Using cached results for: ${trimmedText.substring(0, 30)}...`);
+          
           // Find existing matches in this range
-          const matchesToRemove = this.matches.filter(m => 
+          const existingMatchesInRange = this.matches.filter(m => 
             m.offset >= chunk.startOffset && m.offset < chunk.endOffset
           );
           
-          // Only process if we have new matches to add or existing ones to remove
-          // For rate limit errors, json.matches will be empty, so we won't remove existing matches
-          if (matchesToRemove.length > 0 || json.matches.length > 0) {
-            // Update stats counter for removed matches
-            matchesToRemove.forEach(m => {
-              if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
-              if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
-              if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
-            });
-            
-            // Remove the existing formatting for matches in this range
-            if (matchesToRemove.length > 0 && json.matches.length > 0) {
-              // Only remove existing matches if we have new ones to add
-              // This prevents clearing suggestions when rate limited
-              this.boxes.removeMatches(matchesToRemove);
+          // Only update if we have existing matches to replace or new ones to add
+          if (existingMatchesInRange.length > 0 || cachedData.matches.length > 0) {
+            // First remove the existing formatting for matches in this range
+            if (existingMatchesInRange.length > 0) {
+              // Remove these specific matches instead of removing all formatting in range
+              this.boxes.removeMatches(existingMatchesInRange);
               
               // Now remove from the matches array
               this.matches = this.matches.filter(m => 
@@ -579,56 +565,139 @@ export class QuillDrejtshkruaj {
               );
             }
             
-            // Add new matches with adjusted offsets and store original offset for caching
-            if (json.matches.length > 0) {
-              const adjustedMatches = json.matches.map(match => ({
-                ...match,
-                originalOffset: match.offset, // Store original offset for future repositioning
-                offset: match.offset + chunk.startOffset
-              }));
-              
-              this.matches.push(...adjustedMatches);
-              
-              // Store in content cache
-              this.checkedContent.set(contentHash, {
-                timestamp: now,
-                matches: adjustedMatches
-              });
-              
-              // Update stats counter for new matches
-              adjustedMatches.forEach(m => {
-                if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-                if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-                if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-              });
-              
-              console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
-              
-              // Update highlights for this paragraph only
-              adjustedMatches.forEach(match => {
-                this.boxes.addSuggestionBoxForMatch(match);
-              });
-            }
+            // Add cached matches with adjusted offsets
+            const adjustedMatches = cachedData.matches.map(match => ({
+              ...match,
+              offset: match.offset - (match.originalOffset || 0) + chunk.startOffset
+            }));
+            
+            this.matches.push(...adjustedMatches);
+            
+            // Update highlights for this paragraph only
+            adjustedMatches.forEach(match => {
+              this.boxes.addSuggestionBoxForMatch(match);
+            });
           }
+          
+          // Mark this paragraph as recently checked
+          this.recentlyCheckedParagraphs.add(chunk.index);
+          
+          return;
         }
         
-        // Update cache
-        this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
+        // Queue this API call to avoid simultaneous requests
+        this.apiCallQueue.push(async () => {
+          // Track this paragraph as being sent to the API
+          this.trackParagraphSent(contentHash, chunk.text);
+
+          // Track this exact content
+          this.exactContentProcessed.set(exactHash, Date.now());
+          
+          // Double check the content hash hasn't been checked by a different paragraph
+          // while this was in the queue
+          const recheckCachedData = this.checkedContent.get(contentHash);
+          if (recheckCachedData && (now - recheckCachedData.timestamp < 30000)) {
+            console.log(`Content already checked while in queue: ${trimmedText.substring(0, 30)}...`);
+            return;
+          }
+          
+          // Mark paragraph as being processed
+          this.processingParagraphs.add(chunk.index);
+          
+          try {
+      this.loader.startLoading();
+      
+      const json = await this.getDrejtshkruajResults(chunk.text);
+      
+      if (json && json.matches) {
+              // Find existing matches in this range
+        const matchesToRemove = this.matches.filter(m => 
+          m.offset >= chunk.startOffset && m.offset < chunk.endOffset
+        );
         
-        // Mark this paragraph as recently checked
-        this.recentlyCheckedParagraphs.add(chunk.index);
+              // Only process if we have new matches to add or existing ones to remove
+              // For rate limit errors, json.matches will be empty, so we won't remove existing matches
+              if (matchesToRemove.length > 0 || json.matches.length > 0) {
+        // Update stats counter for removed matches
+        matchesToRemove.forEach(m => {
+                  if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
+                  if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
+                  if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
+                });
+                
+                // Remove the existing formatting for matches in this range
+                if (matchesToRemove.length > 0 && json.matches.length > 0) {
+                  // Only remove existing matches if we have new ones to add
+                  // This prevents clearing suggestions when rate limited
+                  this.boxes.removeMatches(matchesToRemove);
+                  
+                  // Now remove from the matches array
+        this.matches = this.matches.filter(m => 
+          !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
+        );
+                }
+          
+                // Add new matches with adjusted offsets and store original offset for caching
+                if (json.matches.length > 0) {
+        const adjustedMatches = json.matches.map(match => ({
+          ...match,
+                    originalOffset: match.offset, // Store original offset for future repositioning
+          offset: match.offset + chunk.startOffset
+        }));
         
-        // Update UI for this paragraph only
-        this.updateUIForParagraph(chunk);
+        this.matches.push(...adjustedMatches);
+                  
+                  // Store in content cache
+                  this.checkedContent.set(contentHash, {
+                    timestamp: now,
+                    matches: adjustedMatches
+                  });
         
-      } finally {
-        this.processingParagraphs.delete(chunk.index);
+        // Update stats counter for new matches
+        adjustedMatches.forEach(m => {
+                    if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+                    if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
+                    if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
+        });
+        
+        console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
+                  
+                  // Update highlights for this paragraph only
+                  adjustedMatches.forEach(match => {
+                    this.boxes.addSuggestionBoxForMatch(match);
+                  });
+                }
+              }
       }
+      
+      // Update cache
+      this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
+            
+            // Mark this paragraph as recently checked
+            this.recentlyCheckedParagraphs.add(chunk.index);
+            
+        // Update stats
+        this.updateStats();
+          } catch (error) {
+            console.error('Error processing paragraph:', error);
+            // Don't let errors in one paragraph affect the others
+            // or cause suggestions to disappear
+          } finally {
+            // Release the processing lock
+            this.processingParagraphs.delete(chunk.index);
+            this.loader.stopLoading();
+          }
+        });
+        
+        // Process the queue
+        this.processApiCallQueue();
+      }, 4000)); // Use a fixed delay value
     } catch (error) {
-      console.error(`Error processing chunk ${chunk.index}:`, error);
+      console.error('Error in checkParagraphSpellingWithDelay:', error);
       if (chunk.index !== undefined) {
         this.processingParagraphs.delete(chunk.index);
       }
+      this.loader.stopLoading();
     }
   }
 
@@ -809,18 +878,48 @@ export class QuillDrejtshkruaj {
   private async processApiCallQueue() {
     if (this.apiCallInProgress || this.apiCallQueue.length === 0) return;
     
+    // Add rate limiting
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCallTime;
+    
+    // If we've made too many calls in the last minute, slow down
+    if (this.apiCallCount >= this.MAX_API_CALLS_PER_MINUTE) {
+      console.log(`Rate limiting: Made ${this.apiCallCount} API calls already, waiting longer...`);
+      // Wait at least 2 seconds if we're approaching rate limits
+      setTimeout(() => this.processApiCallQueue(), 2000);
+      return;
+    }
+    
+    // Make sure we're not calling the API too frequently
+    if (timeSinceLastCall < this.API_CALL_COOLDOWN) {
+      console.log(`Rate limiting: Only ${timeSinceLastCall}ms since last API call, waiting...`);
+      setTimeout(() => this.processApiCallQueue(), this.API_CALL_COOLDOWN - timeSinceLastCall);
+      return;
+    }
+    
     this.apiCallInProgress = true;
     try {
       const nextCall = this.apiCallQueue.shift();
-      if (nextCall) await nextCall();
+      if (nextCall) {
+        // Update tracking for rate limiting
+        this.lastApiCallTime = Date.now();
+        this.apiCallCount++;
+        
+        // After 60 seconds, decrement the counter
+        setTimeout(() => {
+          this.apiCallCount = Math.max(0, this.apiCallCount - 1);
+        }, 60000);
+        
+        await nextCall();
+      }
     } catch (error) {
       console.error("Error processing API call queue:", error);
       // Don't let errors in queue processing break the entire system
     } finally {
       this.apiCallInProgress = false;
-      // Process next item in queue if any
+      // Process next item in queue if any - with a delay to prevent rapid consecutive calls
       if (this.apiCallQueue.length > 0) {
-        setTimeout(() => this.processApiCallQueue(), 100);
+        setTimeout(() => this.processApiCallQueue(), 300);
       }
     }
   }
@@ -828,6 +927,12 @@ export class QuillDrejtshkruaj {
   // Helper to get a content hash independent of paragraph position
   private getContentHash(text: string): string {
     return text.trim();
+  }
+
+  // Get an exact match hash that's even more strict for deduplication
+  private getExactContentHash(text: string): string {
+    // Remove all whitespace and make lowercase for stricter matching
+    return text.trim().toLowerCase().replace(/\s+/g, '');
   }
 
   // Checks spelling for a single paragraph chunk
@@ -840,6 +945,22 @@ export class QuillDrejtshkruaj {
       if (chunk.index === -1) {
         // Use the paragraph offset to determine a unique index
         chunk.index = chunk.startOffset;
+      }
+      
+      // Get exact content hash for stricter deduplication
+      const exactHash = this.getExactContentHash(chunk.text);
+      
+      // Check if we've already processed this exact content
+      const lastProcessedTime = this.exactContentProcessed.get(exactHash);
+      if (lastProcessedTime) {
+        const now = Date.now();
+        const timeSinceLastProcessed = now - lastProcessedTime;
+        
+        // If we've processed this exact content within the last 10 seconds, skip it entirely
+        if (timeSinceLastProcessed < 10000) {
+          console.log(`Exact content processed ${timeSinceLastProcessed}ms ago, skipping: ${trimmedText.substring(0, 30)}...`);
+          return;
+        }
       }
       
       // Check if this exact paragraph is already being processed
@@ -858,6 +979,20 @@ export class QuillDrejtshkruaj {
         return;
       }
       
+      // Check if we just sent this exact text to the API (duplicate prevention)
+      if (this.recentlySentParagraphs.has(contentHash)) {
+        console.log(`Duplicate paragraph text detected, skipping: ${trimmedText.substring(0, 30)}...`);
+        return;
+      }
+      
+      // Check if we've processed this exact content recently (with longer timeout)
+      const now = Date.now();
+      const contentCacheTime = this.paragraphContentTimestamps.get(contentHash);
+      if (contentCacheTime && (now - contentCacheTime < 60000)) { // 60 second tracking
+        console.log(`Paragraph content processed recently, skipping duplicate: ${trimmedText.substring(0, 30)}...`);
+        return;
+      }
+      
       // Clear any existing debounce for this paragraph
       if (this.paragraphDebounces.has(chunk.index)) {
         clearTimeout(this.paragraphDebounces.get(chunk.index));
@@ -865,614 +1000,17 @@ export class QuillDrejtshkruaj {
       
       // Set debounce to avoid rapid successive checks of the same paragraph
       this.paragraphDebounces.set(chunk.index, setTimeout(async () => {
-        // The rest of the implementation is the same as checkParagraphSpelling
-        // Get content hash that's independent of paragraph position
-        const contentHash = this.getContentHash(chunk.text);
-        const cachedData = this.checkedContent.get(contentHash);
-        const now = Date.now();
-        
-        // If we recently checked this exact content, reuse the results
-        if (cachedData && (now - cachedData.timestamp < 30000)) { // 30 second cache
-          console.log(`Using cached results for: ${trimmedText.substring(0, 30)}...`);
-          
-          // Find existing matches in this range
-          const existingMatchesInRange = this.matches.filter(m => 
-            m.offset >= chunk.startOffset && m.offset < chunk.endOffset
-          );
-          
-          // Only update if we have existing matches to replace or new ones to add
-          if (existingMatchesInRange.length > 0 || cachedData.matches.length > 0) {
-            // First remove the existing formatting for matches in this range
-            if (existingMatchesInRange.length > 0) {
-              // Remove these specific matches instead of removing all formatting in range
-              this.boxes.removeMatches(existingMatchesInRange);
-              
-              // Now remove from the matches array
-              this.matches = this.matches.filter(m => 
-                !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-              );
-            }
-            
-            // Add cached matches with adjusted offsets
-            const adjustedMatches = cachedData.matches.map(match => ({
-              ...match,
-              offset: match.offset - (match.originalOffset || 0) + chunk.startOffset
-            }));
-            
-            this.matches.push(...adjustedMatches);
-            
-            // Update highlights for this paragraph only
-            adjustedMatches.forEach(match => {
-              this.boxes.addSuggestionBoxForMatch(match);
-            });
-          }
-          
-          return;
-        }
-        
-        // Queue this API call to avoid simultaneous requests
-        this.apiCallQueue.push(async () => {
-          // Double check the content hash hasn't been checked by a different paragraph
-          // while this was in the queue
-          const recheckCachedData = this.checkedContent.get(contentHash);
-          if (recheckCachedData && (now - recheckCachedData.timestamp < 30000)) {
-            console.log(`Content already checked while in queue: ${trimmedText.substring(0, 30)}...`);
-            return;
-          }
-          
-          // Mark paragraph as being processed
-          this.processingParagraphs.add(chunk.index);
-          
-          try {
-            this.loader.startLoading();
-            
-            const json = await this.getDrejtshkruajResults(chunk.text);
-            
-            if (json && json.matches) {
-              // Find existing matches in this range
-              const matchesToRemove = this.matches.filter(m => 
-                m.offset >= chunk.startOffset && m.offset < chunk.endOffset
-              );
-              
-              // Only process if we have new matches to add or existing ones to remove
-              // For rate limit errors, json.matches will be empty, so we won't remove existing matches
-              if (matchesToRemove.length > 0 || json.matches.length > 0) {
-                // Update stats counter for removed matches
-                matchesToRemove.forEach(m => {
-                  if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
-                  if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
-                  if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
-                });
-                
-                // Remove the existing formatting for matches in this range
-                if (matchesToRemove.length > 0 && json.matches.length > 0) {
-                  // Only remove existing matches if we have new ones to add
-                  // This prevents clearing suggestions when rate limited
-                  this.boxes.removeMatches(matchesToRemove);
-                  
-                  // Now remove from the matches array
-                  this.matches = this.matches.filter(m => 
-                    !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-                  );
-                }
-                
-                // Add new matches with adjusted offsets and store original offset for caching
-                if (json.matches.length > 0) {
-                  const adjustedMatches = json.matches.map(match => ({
-                    ...match,
-                    originalOffset: match.offset, // Store original offset for future repositioning
-                    offset: match.offset + chunk.startOffset
-                  }));
-                  
-                  this.matches.push(...adjustedMatches);
-                  
-                  // Store in content cache
-                  this.checkedContent.set(contentHash, {
-                    timestamp: now,
-                    matches: adjustedMatches
-                  });
-                  
-                  // Update stats counter for new matches
-                  adjustedMatches.forEach(m => {
-                    if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-                    if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-                    if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-                  });
-                  
-                  console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
-                  
-                  // Update highlights for this paragraph only
-                  adjustedMatches.forEach(match => {
-                    this.boxes.addSuggestionBoxForMatch(match);
-                  });
-                }
-              }
-            }
-            
-            // Update cache
-            this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
-            
-            // Mark this paragraph as recently checked
-            this.recentlyCheckedParagraphs.add(chunk.index);
-            
-            // Update stats
-            this.updateStats();
-          } catch (error) {
-            console.error('Error processing paragraph:', error);
-            // Don't let errors in one paragraph affect the others
-            // or cause suggestions to disappear
-          } finally {
-            // Release the processing lock
-            this.processingParagraphs.delete(chunk.index);
-            this.loader.stopLoading();
-          }
-        });
-        
-        // Process the queue
-        this.processApiCallQueue();
-      }, 800)); // Increased debounce to 800ms
+        // Delegate to the regular check method
+        this.checkParagraphSpelling(chunk);
+      }, 4000)); // Fixed delay of 4000ms
     } catch (error) {
       console.error('Error in checkParagraphSpelling:', error);
       if (chunk.index !== undefined) {
         this.processingParagraphs.delete(chunk.index);
       }
-      this.loader.stopLoading();
-    }
-  }
-  
-  // Helper method to update UI for a paragraph
-  private updateUIForParagraph(chunk: { startOffset: number, endOffset: number }) {
-    try {
-      // Update stats
-      this.updateStats();
-      
-      // IMPORTANT CHANGE: Instead of removing all formatting in range and then adding back,
-      // just get matches in this range and update them individually
-      
-      // Get matches in this range
-      const matchesInRange = this.matches.filter(match => 
-        match && 
-        typeof match.offset === 'number' && 
-        typeof match.length === 'number' &&
-        match.offset >= chunk.startOffset && 
-        (match.offset + match.length) <= chunk.endOffset
-      );
-      
-      // For each match in the range, update its highlighting
-      matchesInRange.forEach(match => {
-        this.boxes.addSuggestionBoxForMatch(match);
-      });
-    } catch (error) {
-      console.error('Error updating UI for paragraph:', error);
     }
   }
 
-  // Clear cache methods to handle changes
-  private clearCache() {
-    this.paragraphCache.clear();
-    this.checkedContent.clear();
-    this.recentlyCheckedParagraphs.clear();
-  }
-
-  // Improved clear cache for range to also invalidate content hash
-  private clearCacheForRange(start: number, end: number) {
-    const text = this.quill.getText();
-    const chunks = TextChunker.getChunks(text);
-    
-    for (const chunk of chunks) {
-      // If the chunk overlaps with [start, end], clear its cache entry
-      if (!(chunk.endOffset < start || chunk.startOffset > end)) {
-        this.paragraphCache.delete(chunk.index);
-        this.recentlyCheckedParagraphs.delete(chunk.index);
-        
-        // Also invalidate content hash
-        const contentHash = this.getContentHash(chunk.text);
-        this.checkedContent.delete(contentHash);
-      }
-    }
-  }
-
-  // Add an onKey handler to handle space key more aggressively
-  private addSpaceKeyHandler() {
-    // Add direct event listener for space key to stop highlight stretching
-    this.quill.root.addEventListener('keydown', (e) => {
-      if (e.key === ' ' || e.keyCode === 32) {
-        // Get current cursor position before space is inserted
-        const selection = this.quill.getSelection();
-        if (selection) {
-          // Immediately remove any highlight that would extend past this point
-          this.stripHighlightsAtCursor(selection.index);
-          
-          // Schedule another check after the space is inserted
-          setTimeout(() => {
-            const newSelection = this.quill.getSelection();
-            if (newSelection) {
-              this.stripHighlightsAtCursor(newSelection.index);
-            }
-          }, 0);
-        }
-      }
-    });
-  }
-  
-  // Aggressively strip highlights at and after cursor
-  private stripHighlightsAtCursor(cursorPosition: number) {
-    try {
-      if (cursorPosition === undefined || cursorPosition < 0) {
-        console.warn('Invalid cursor position in stripHighlightsAtCursor:', cursorPosition);
-        return;
-      }
-      
-      // Validate cursor position is within document bounds
-      const textLength = this.quill.getText().length;
-      if (cursorPosition > textLength) {
-        console.warn('Cursor position out of bounds:', cursorPosition, 'text length:', textLength);
-        return;
-      }
-      
-      // For each match in our collection
-      this.matches.forEach(match => {
-        if (!match || typeof match.offset !== 'number' || typeof match.length !== 'number') {
-          return; // Skip invalid matches
-        }
-        
-        // If this match extends to or beyond cursor position
-        if (match.offset + match.length >= cursorPosition) {
-          // If match starts before cursor
-          if (match.offset < cursorPosition) {
-            try {
-              // 1. Remove the entire formatting
-              this.quill.formatText(match.offset, match.length, 'ltmatch', false, 'silent');
-              
-              // 2. Calculate new length that stops at cursor
-              const newLength = cursorPosition - match.offset;
-              
-              // 3. Only if something remains to highlight
-              if (newLength > 0) {
-                // 4. Create a new match object with correct length
-                const correctedMatch = { ...match, length: newLength };
-                
-                // 5. Apply the corrected highlighting (stopping at cursor)
-                this.quill.formatText(match.offset, newLength, 'ltmatch', correctedMatch, 'silent');
-                
-                // 6. Update the match length in our data
-                match.length = newLength;
-              }
-            } catch (err) {
-              console.error('Error trimming highlight at cursor:', err);
-            }
-          } else {
-            // For matches that start at or after cursor, remove formatting completely
-            try {
-              this.quill.formatText(match.offset, match.length, 'ltmatch', false, 'silent');
-            } catch (err) {
-              console.error('Error removing highlight after cursor:', err);
-            }
-          }
-        }
-      });
-      
-      // Restore cursor position safely
-      try {
-        const selection = this.quill.getSelection();
-        if (selection) {
-          this.quill.setSelection(selection.index, 0, 'silent');
-        }
-      } catch (err) {
-        console.error('Error restoring cursor position:', err);
-      }
-    } catch (err) {
-      console.error('Error in stripHighlightsAtCursor:', err);
-    }
-  }
-
-  // Call this to check all paragraphs (e.g., on load or paste)
-  private checkAllParagraphs() {
-    const text = this.quill.getText();
-    const chunks = TextChunker.getChunks(text);
-    for (const chunk of chunks) {
-      this.checkParagraphSpelling(chunk);
-    }
-  }
-
-  // Improved method to fix underline spreading when pressing space
-  private fixUnderlineSpread(changePosition: number) {
-    // First call the more aggressive method to handle any current highlights at cursor
-    this.stripHighlightsAtCursor(changePosition);
-    
-    // Additional processing if needed...
-    const text = this.quill.getText();
-    
-    // Force Quill to re-render to ensure formatting is correctly displayed
-    setTimeout(() => {
-      const selection = this.quill.getSelection();
-      if (selection) {
-        this.quill.setSelection(selection, 'silent');
-      }
-    }, 10);
-  }
-
-  /**
-   * Force a complete refresh of all highlights to ensure all suggestions are visible
-   * Only used when absolutely necessary, like after major document changes or lost highlights
-   */
-  private refreshAllHighlights() {
-    try {
-      console.log('Refreshing all highlights...');
-      
-      // Store current selection
-      const selection = this.quill.getSelection();
-      
-      // Get all current matches to re-apply
-      const matchesToReapply = [...this.matches];
-      
-      // Only proceed if there are matches to show
-      if (matchesToReapply.length === 0) {
-        console.log('No matches to refresh, skipping');
-        return;
-      }
-      
-      // First ensure counters are reset and recalculated
-      this.spellingCount = 0;
-      this.grammarCount = 0;
-      this.punctuationCount = 0;
-
-      // Recalculate stats from preserved matches
-      matchesToReapply.forEach(m => {
-        if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-        if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-        if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-      });
-      
-      // Update the UI counters
-      this.updateStats();
-      
-      // Check if active range has changed since full refresh is expensive
-      const fullTextLastChanged = Date.now() - (this.lastTextChangeTime || 0);
-      const shouldDoFullRefresh = fullTextLastChanged > 2000; // Only do full refresh if text hasn't changed in 2 seconds
-      
-      if (!shouldDoFullRefresh) {
-        console.log('Skipping full refresh since text changed recently');
-        return;
-      }
-      
-      // Remove all highlights first (in a throttled way)
-      if (!this.isRefreshing) {
-        this.isRefreshing = true;
-        
-        // Use a single operation to refresh highlights
-        this.boxes.removeSuggestionBoxes();
-        
-        // Use Delta operations for better performance
-        let delta = new Delta();
-        let currentIndex = 0;
-        
-        // Sort matches by offset to process them in order
-        const sortedMatches = [...matchesToReapply].sort((a, b) => a.offset - b.offset);
-        
-        // Build a single delta operation for all formatting
-        sortedMatches.forEach(match => {
-          if (!match || typeof match.offset !== 'number' || typeof match.length !== 'number') {
-            return;
-          }
-          
-          if (match.offset < currentIndex) {
-            return; // Skip overlapping matches
-          }
-          
-          // Retain up to the match
-          if (match.offset > currentIndex) {
-            delta.retain(match.offset - currentIndex);
-            currentIndex = match.offset;
-          }
-          
-          // Apply the highlight
-          delta.retain(match.length, { ltmatch: match });
-          currentIndex += match.length;
-        });
-        
-        // Apply the combined operations silently
-        if (delta.ops.length > 0) {
-          this.quill.updateContents(delta, 'silent');
-        }
-        
-        // Restore selection
-        if (selection) {
-          this.quill.setSelection(selection.index, selection.length || 0, 'silent');
-        }
-        
-        console.log('All highlights refreshed successfully');
-        
-        // Reset refresh flag after a short delay
-        setTimeout(() => {
-          this.isRefreshing = false;
-        }, 1000);
-      } else {
-        console.log('Already refreshing, skipping duplicate refresh');
-      }
-    } catch (error) {
-      console.error('Error refreshing highlights:', error);
-      this.isRefreshing = false;
-    }
-  }
-
-  // New method to handle paragraph spelling check with a custom delay
-  private checkParagraphSpellingWithDelay(chunk: { text: string, startOffset: number, endOffset: number, index: number }, delay: number) {
-    try {
-      const trimmedText = chunk.text.trim();
-      if (!trimmedText) return;
-      
-      // If index was not set (like when calling from onTextChange), calculate it
-      if (chunk.index === -1) {
-        // Use the paragraph offset to determine a unique index
-        chunk.index = chunk.startOffset;
-      }
-      
-      // Check if this exact paragraph is already being processed
-      if (this.processingParagraphs.has(chunk.index)) {
-        console.log(`Paragraph ${chunk.index} already being processed, skipping`);
-        return;
-      }
-      
-      // Clear any existing debounce for this paragraph
-      if (this.paragraphDebounces.has(chunk.index)) {
-        clearTimeout(this.paragraphDebounces.get(chunk.index));
-      }
-      
-      // Set debounce to avoid rapid successive checks of the same paragraph
-      this.paragraphDebounces.set(chunk.index, setTimeout(async () => {
-        // The rest of the implementation is the same as checkParagraphSpelling
-        // Get content hash that's independent of paragraph position
-        const contentHash = this.getContentHash(chunk.text);
-        const cachedData = this.checkedContent.get(contentHash);
-        const now = Date.now();
-        
-        // If we recently checked this exact content, reuse the results
-        if (cachedData && (now - cachedData.timestamp < 30000)) { // 30 second cache
-          console.log(`Using cached results for: ${trimmedText.substring(0, 30)}...`);
-          
-          // Find existing matches in this range
-          const existingMatchesInRange = this.matches.filter(m => 
-            m.offset >= chunk.startOffset && m.offset < chunk.endOffset
-          );
-          
-          // Only update if we have existing matches to replace or new ones to add
-          if (existingMatchesInRange.length > 0 || cachedData.matches.length > 0) {
-            // First remove the existing formatting for matches in this range
-            if (existingMatchesInRange.length > 0) {
-              // Remove these specific matches instead of removing all formatting in range
-              this.boxes.removeMatches(existingMatchesInRange);
-              
-              // Now remove from the matches array
-              this.matches = this.matches.filter(m => 
-                !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-              );
-            }
-            
-            // Add cached matches with adjusted offsets
-            const adjustedMatches = cachedData.matches.map(match => ({
-              ...match,
-              offset: match.offset - (match.originalOffset || 0) + chunk.startOffset
-            }));
-            
-            this.matches.push(...adjustedMatches);
-            
-            // Update highlights for this paragraph only
-            adjustedMatches.forEach(match => {
-              this.boxes.addSuggestionBoxForMatch(match);
-            });
-          }
-          
-          return;
-        }
-        
-        // Rest of implementation follows checkParagraphSpelling
-        // Queue this API call
-        this.apiCallQueue.push(async () => {
-          // Double check the content hash hasn't been checked by a different paragraph
-          // while this was in the queue
-          const recheckCachedData = this.checkedContent.get(contentHash);
-          if (recheckCachedData && (now - recheckCachedData.timestamp < 30000)) {
-            console.log(`Content already checked while in queue: ${trimmedText.substring(0, 30)}...`);
-            return;
-          }
-          
-          // Mark paragraph as being processed
-          this.processingParagraphs.add(chunk.index);
-          
-          try {
-            this.loader.startLoading();
-            
-            const json = await this.getDrejtshkruajResults(chunk.text);
-            
-            if (json && json.matches) {
-              // Find existing matches in this range
-              const matchesToRemove = this.matches.filter(m => 
-                m.offset >= chunk.startOffset && m.offset < chunk.endOffset
-              );
-              
-              // Only process if we have new matches to add or existing ones to remove
-              // For rate limit errors, json.matches will be empty, so we won't remove existing matches
-              if (matchesToRemove.length > 0 || json.matches.length > 0) {
-                // Update stats counter for removed matches
-                matchesToRemove.forEach(m => {
-                  if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
-                  if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount--;
-                  if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount--;
-                });
-                
-                // Remove the existing formatting for matches in this range
-                if (matchesToRemove.length > 0 && json.matches.length > 0) {
-                  // Only remove existing matches if we have new ones to add
-                  // This prevents clearing suggestions when rate limited
-                  this.boxes.removeMatches(matchesToRemove);
-                  
-                  // Now remove from the matches array
-                  this.matches = this.matches.filter(m => 
-                    !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
-                  );
-                }
-                
-                // Add new matches with adjusted offsets and store original offset for caching
-                if (json.matches.length > 0) {
-                  const adjustedMatches = json.matches.map(match => ({
-                    ...match,
-                    originalOffset: match.offset, // Store original offset for future repositioning
-                    offset: match.offset + chunk.startOffset
-                  }));
-                  
-                  this.matches.push(...adjustedMatches);
-                  
-                  // Store in content cache
-                  this.checkedContent.set(contentHash, {
-                    timestamp: now,
-                    matches: adjustedMatches
-                  });
-                  
-                  // Update stats counter for new matches
-                  adjustedMatches.forEach(m => {
-                    if (m.shortMessage?.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-                    if (m.shortMessage?.toLowerCase().includes('gramatikore')) this.grammarCount++;
-                    if (m.shortMessage?.toLowerCase().includes('pikë')) this.punctuationCount++;
-                  });
-                  
-                  console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
-                  
-                  // Update highlights for this paragraph only
-                  adjustedMatches.forEach(match => {
-                    this.boxes.addSuggestionBoxForMatch(match);
-                  });
-                }
-              }
-            }
-            
-            // Update cache
-            this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
-            
-            // Mark this paragraph as recently checked
-            this.recentlyCheckedParagraphs.add(chunk.index);
-            
-            // Update stats
-            this.updateStats();
-          } finally {
-            // Release the processing lock
-            this.processingParagraphs.delete(chunk.index);
-            this.loader.stopLoading();
-          }
-        });
-        
-        // Process the queue
-        this.processApiCallQueue();
-      }, delay)); // Use the passed-in delay
-    } catch (error) {
-      console.error('Error in checkParagraphSpellingWithDelay:', error);
-      if (chunk.index !== undefined) {
-        this.processingParagraphs.delete(chunk.index);
-      }
-      this.loader.stopLoading();
-    }
-  }
-  
   // Enhance the refreshVisibleMatches method to be more reliable with small edits
   private refreshVisibleMatches() {
     try {
@@ -1567,8 +1105,8 @@ export class QuillDrejtshkruaj {
       this.paragraphCache.clear();
       this.checkedContent.clear();
       
-      // Perform a full spelling check
-      this.checkSpelling().then(() => {
+      // Perform a full spelling check, but one paragraph at a time
+      this.checkUncachedParagraphs().then(() => {
         console.log('Initial full check completed');
         this.hasInitialCheckCompleted = true;
         this.lastFullCheckTime = Date.now();
@@ -1582,7 +1120,7 @@ export class QuillDrejtshkruaj {
     }
   }
 
-  // New method to check only paragraphs without cached results
+  // Updated method to check only paragraphs without cached results - sequentially
   private async checkUncachedParagraphs() {
     if (document.querySelector("lt-toolbar")) {
       debug("Drejtshkruaj is installed as extension, not checking");
@@ -1619,29 +1157,21 @@ export class QuillDrejtshkruaj {
         return Promise.resolve();
       }
       
-      // Process chunks in batches to avoid overwhelming the API
-      let processed = 0;
-      const MAX_CONCURRENT = 2; // Process fewer chunks at a time to reduce token usage
-      
-      while (processed < uncachedChunks.length) {
-        // Get the next batch of chunks to process
-        const batch = uncachedChunks.slice(processed, processed + MAX_CONCURRENT);
-        console.log(`Processing batch of ${batch.length} uncached chunks`);
+      // Process chunks one at a time, waiting for each to complete
+      for (let i = 0; i < uncachedChunks.length; i++) {
+        const chunk = uncachedChunks[i];
+        console.log(`Processing uncached chunk ${i+1}/${uncachedChunks.length}`);
         
-        processed += batch.length;
+        // Process this chunk and wait for it to complete
+        await this.processChunk(chunk);
         
-        // Process this batch concurrently
-        const promises = batch.map(chunk => this.processChunk(chunk));
-        await Promise.all(promises);
-        
-        // Longer delay between batches to reduce token usage
-        if (processed < uncachedChunks.length) {
-          console.log(`Waiting before processing next batch...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
+        // Brief delay between chunks to ensure UI can update
+        if (i < uncachedChunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       
-      // Update stats now that all paragraphs are processed
+      // Update stats after all paragraphs are processed
       this.updateStats();
       
       console.log("Uncached paragraphs check complete!");
@@ -1654,6 +1184,143 @@ export class QuillDrejtshkruaj {
     
     // Return a promise that resolves when the operation is complete
     return Promise.resolve();
+  }
+
+  // Helper to log when paragraph is actually sent to API and track content
+  private trackParagraphSent(contentHash: string, text: string) {
+    console.log(`🔄 SENDING TO API: ${text.substring(0, 30)}...`);
+    
+    // Add to recently sent set (short-term tracking)
+    this.recentlySentParagraphs.add(contentHash);
+    
+    // Remove from set after 10 seconds to prevent memory buildup
+    setTimeout(() => {
+      this.recentlySentParagraphs.delete(contentHash);
+    }, 10000);
+    
+    // Add to content timestamps map (longer-term tracking)
+    this.paragraphContentTimestamps.set(contentHash, Date.now());
+    
+    // Clean up old entries from the timestamps map after 2 minutes
+    setTimeout(() => {
+      this.paragraphContentTimestamps.delete(contentHash);
+    }, 120000);
+    
+    // Also track with exact content hash for even stricter deduplication
+    const exactHash = this.getExactContentHash(text);
+    this.exactContentProcessed.set(exactHash, Date.now());
+  }
+
+  // Clear cache methods to handle changes
+  private clearCache() {
+    this.paragraphCache.clear();
+    this.checkedContent.clear();
+    this.recentlyCheckedParagraphs.clear();
+    this.recentlySentParagraphs.clear();
+    this.paragraphContentTimestamps.clear();
+    this.exactContentProcessed.clear();
+  }
+
+  // Improved clear cache for range to also invalidate content hash
+  private clearCacheForRange(start: number, end: number) {
+    const text = this.quill.getText();
+    const chunks = TextChunker.getChunks(text);
+    
+    for (const chunk of chunks) {
+      // If the chunk overlaps with [start, end], clear its cache entry
+      if (!(chunk.endOffset < start || chunk.startOffset > end)) {
+        this.paragraphCache.delete(chunk.index);
+        this.recentlyCheckedParagraphs.delete(chunk.index);
+        
+        // Also invalidate content hash
+        const contentHash = this.getContentHash(chunk.text);
+        this.checkedContent.delete(contentHash);
+        this.paragraphContentTimestamps.delete(contentHash);
+      }
+    }
+  }
+
+  // Add an onKey handler to handle space key more aggressively
+  private addSpaceKeyHandler() {
+    // Add direct event listener for space key to stop highlight stretching
+    this.quill.root.addEventListener('keydown', (e) => {
+      if (e.key === ' ') {
+        e.preventDefault();
+      }
+    });
+  }
+
+  // Helper method to update UI for a paragraph
+  private updateUIForParagraph(chunk: { startOffset: number, endOffset: number }) {
+    try {
+      // Update stats
+      this.updateStats();
+    } catch (error) {
+      console.error('Error updating UI for paragraph:', error);
+    }
+  }
+
+  // Method to handle paragraph spelling check with a custom delay
+  private checkParagraphSpellingWithDelay(chunk: { text: string, startOffset: number, endOffset: number, index: number }, _delayMs: number) {
+    try {
+      const trimmedText = chunk.text.trim();
+      if (!trimmedText) return;
+      
+      // If index was not set (like when calling from onTextChange), calculate it
+      if (chunk.index === -1) {
+        // Use the paragraph offset to determine a unique index
+        chunk.index = chunk.startOffset;
+      }
+      
+      // Check if this exact paragraph is already being processed
+      if (this.processingParagraphs.has(chunk.index)) {
+        console.log(`Paragraph ${chunk.index} already being processed, skipping`);
+        return;
+      }
+      
+      // Get content hash that's independent of paragraph position
+      const contentHash = this.getContentHash(chunk.text);
+      
+      // Get exact content hash for stricter deduplication
+      const exactHash = this.getExactContentHash(chunk.text);
+      
+      // Check if this paragraph was recently checked (and its content didn't change)
+      const cachedParagraph = this.paragraphCache.get(chunk.index);
+      if (cachedParagraph && cachedParagraph.text === chunk.text && this.recentlyCheckedParagraphs.has(chunk.index)) {
+        console.log(`Paragraph ${chunk.index} was recently checked and content didn't change, skipping`);
+        return;
+      }
+      
+      // Check if we just sent this exact text to the API (duplicate prevention)
+      if (this.recentlySentParagraphs.has(contentHash)) {
+        console.log(`Duplicate paragraph text detected, skipping: ${trimmedText.substring(0, 30)}...`);
+        return;
+      }
+      
+      // Check if we've processed this exact content recently (with longer timeout)
+      const now = Date.now();
+      const contentCacheTime = this.paragraphContentTimestamps.get(contentHash);
+      if (contentCacheTime && (now - contentCacheTime < 60000)) { // 60 second tracking
+        console.log(`Paragraph content processed recently, skipping duplicate: ${trimmedText.substring(0, 30)}...`);
+        return;
+      }
+      
+      // Clear any existing debounce for this paragraph
+      if (this.paragraphDebounces.has(chunk.index)) {
+        clearTimeout(this.paragraphDebounces.get(chunk.index));
+      }
+      
+      // Schedule check with a longer timeout to prevent excessive API calls
+      this.paragraphDebounces.set(chunk.index, setTimeout(() => {
+        // Delegate to the regular check method
+        this.checkParagraphSpelling(chunk);
+      }, 4000)); // Fixed delay of 4000ms
+    } catch (error) {
+      console.error('Error in checkParagraphSpellingWithDelay:', error);
+      if (chunk.index !== undefined) {
+        this.processingParagraphs.delete(chunk.index);
+      }
+    }
   }
 }
 
