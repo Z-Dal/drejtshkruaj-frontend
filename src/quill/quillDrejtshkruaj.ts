@@ -8,6 +8,7 @@ import { DrejtshkruajApi, DrejtshkruajApiParams, MatchesEntity } from "../types"
 import LoadingIndicator from "./LoadingIndicator";
 import { TextChunker } from './TextChunker';
 import { updateTokenUsageFromResponse } from '../services/api';
+import Delta from "quill-delta";
 
 export type QuillDrejtshkruajParams = {
   server: string;
@@ -59,12 +60,16 @@ export class QuillDrejtshkruaj {
     this.boxes = new SuggestionBoxes(this);
     this.popups = new PopupManager(this);
     
+    // Add space key handler
+    this.addSpaceKeyHandler();
+    
     this.quill.on("text-change", (_delta, _oldDelta, source) => {
       if (source === "user") {
         this.onTextChange(_delta);
       }
     });
     
+    // Start spell checking
     this.checkSpelling();
     this.disableNativeSpellcheckIfSet();
   }
@@ -81,7 +86,7 @@ export class QuillDrejtshkruaj {
       clearTimeout(this.typingCooldown);
     }
 
-    // Clear cache for modified range
+    // Process the delta to identify which paragraph was modified
     if (delta && delta.ops) {
       let changeStart = 0;
       let hasDelete = false;
@@ -128,6 +133,24 @@ export class QuillDrejtshkruaj {
             paraEnd++;
           }
           
+          // For insert operations, calculate the length change
+          if (op.insert) {
+            const insertLength = typeof op.insert === 'string' ? op.insert.length : 1;
+            
+            // Update offsets for matches AFTER the insertion point
+            this.matches.forEach(match => {
+              if (match.offset >= changeStart) {
+                match.offset += insertLength;
+              }
+            });
+            
+            // Only clear highlights for the affected paragraph
+            this.boxes.removeSuggestionBoxesInRange(paraStart, paraEnd + insertLength);
+          } else {
+            // For deletions, already handled above
+            this.boxes.removeSuggestionBoxesInRange(paraStart, paraEnd);
+          }
+          
           // Clear cache for this paragraph
           this.clearCacheForRange(paraStart, paraEnd);
           
@@ -136,6 +159,21 @@ export class QuillDrejtshkruaj {
             paraEnd,
             text: text.slice(paraStart, paraEnd)
           });
+          
+          // Check this specific paragraph immediately if it has content
+          const paragraphText = text.slice(paraStart, paraEnd).trim();
+          if (paragraphText) {
+            // Schedule immediate check for this paragraph only
+            setTimeout(() => {
+              const chunk = {
+                text: text.slice(paraStart, paraEnd),
+                startOffset: paraStart,
+                endOffset: paraEnd,
+                index: -1 // Will be set by checkParagraphSpelling
+              };
+              this.checkParagraphSpelling(chunk);
+            }, 100); // Short delay to let Quill finish rendering
+          }
         }
       });
       
@@ -176,7 +214,18 @@ export class QuillDrejtshkruaj {
     // Set cooldown for the full check (which will recalculate counts and re-add boxes)
     this.typingCooldown = setTimeout(() => {
       debug("User stopped typing, checking spelling");
-      this.checkSpelling(); // This needs to recalculate counts correctly
+      // First clear this specific range to prevent visual artifacts
+      const text = this.quill.getText();
+      const fullRefresh = text.length < 1000; // Only do full refresh for smaller documents
+      
+      // Check all paragraphs
+      this.checkSpelling().then(() => {
+        // After checking, ensure all highlights are visible with a slight delay
+        // to let Quill finish any rendering operations
+        if (!fullRefresh) {
+          setTimeout(() => this.refreshAllHighlights(), 100);
+        }
+      });
     }, this.params.cooldownTime);
   }
 
@@ -204,9 +253,9 @@ export class QuillDrejtshkruaj {
     this.spellingCount = 0;
     this.grammarCount = 0;
     this.punctuationCount = 0;
-    let currentMatches: MatchesEntity[] = []; // Build matches locally first
 
-    for (const chunk of chunks) {
+    // Process chunks in parallel but handle UI updates independently
+    const chunkPromises = chunks.map(async (chunk) => {
       const cachedEntry = this.paragraphCache.get(chunk.index);
       
       if (cachedEntry && cachedEntry.text === chunk.text) {
@@ -214,18 +263,17 @@ export class QuillDrejtshkruaj {
         const offsetDiff = chunk.startOffset - cachedEntry.startOffset;
         if (offsetDiff !== 0) {
           this.matches.forEach(match => {
-            if (match.offset >= cachedEntry.startOffset && (match.offset + match.length) <= (cachedEntry.startOffset + cachedEntry.text.length + 1)) {
+            if (match.offset >= cachedEntry.startOffset && 
+                (match.offset + match.length) <= (cachedEntry.startOffset + cachedEntry.text.length + 1)) {
               match.offset += offsetDiff;
             }
           });
         }
         // Update cache with new start offset
         this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
-        // Update suggestion boxes for unchanged paragraph
-        this.boxes.updateSuggestionBoxesForRange(chunk.startOffset, chunk.endOffset);
-        // Update stats after each chunk
-        this.updateStats();
-        continue;
+        
+        // We'll refresh all boxes at the end, so no need to update individually here
+        return; // Skip processing for unchanged paragraphs
       }
       
       console.log('Processing changed chunk:', {
@@ -238,42 +286,53 @@ export class QuillDrejtshkruaj {
         const json = await this.getDrejtshkruajResults(chunk.text);
         
         if (json && json.matches) {
-          // Add new matches with adjusted offsets to the temporary list
+          // Remove existing matches in this chunk's range
+          const matchesToRemove = this.matches.filter(m => 
+            m.offset >= chunk.startOffset && m.offset < chunk.endOffset
+          );
+          
+          // Update stats counters for removed matches
+          matchesToRemove.forEach(m => {
+            if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
+            if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount--;
+            if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount--;
+          });
+          
+          // Remove matches from the array
+          this.matches = this.matches.filter(m => 
+            !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
+          );
+          
+          // Add new matches with adjusted offsets
           const adjustedMatches = json.matches.map(match => ({
             ...match,
             offset: match.offset + chunk.startOffset
           }));
-          currentMatches.push(...adjustedMatches);
-        } else {
-          // If API fails or returns no matches for a chunk that existed before, 
-          // ensure we retain existing matches for that chunk from the cache logic if needed.
-          // (More complex logic might be needed here if API is unreliable)
+          
+          this.matches.push(...adjustedMatches);
+          
+          // Update stats counters for new matches
+          adjustedMatches.forEach(m => {
+            if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+            if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount++;
+            if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount++;
+          });
         }
-      } else {
-         // If chunk is empty, ensure matches previously in this range are removed
-         // (This might need more careful handling based on cache logic)
       }
       
       // Update cache
       this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
-    }
-
-    // Replace old matches with the newly built list
-    this.matches = currentMatches;
-
-    // Recalculate counts based on the final matches list
-    this.matches.forEach(m => {
-      if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
-      if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount++;
-      if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount++;
     });
-
-    // Update boxes based on the final matches
-    this.boxes.removeSuggestionBoxes(); // Clear old ones first
-    this.boxes.addSuggestionBoxes();    // Add new ones
-
-    // Final stats update at the end
+    
+    // Wait for all chunks to finish processing
+    await Promise.all(chunkPromises);
+    
+    // Update stats now that all paragraphs are processed
     this.updateStats();
+    
+    // Force a complete refresh of all boxes after everything is done
+    this.refreshAllHighlights();
+    
     this.loader.stopLoading();
   }
 
@@ -349,19 +408,19 @@ export class QuillDrejtshkruaj {
 
   private setupLayout() {
     // Find the target element where the stats should be placed
-    const sidebarTarget = document.querySelector('.right-sidebar .stats-panel-container');
+    const sidebarTarget = document.querySelector('.right-sidebar');
 
     if (!sidebarTarget) {
-      console.error("QuillDrejtshkruaj Error: Could not find the .stats-panel-container element within .right-sidebar. Stats panel cannot be attached.");
+      console.error("QuillDrejtshkruaj Error: Could not find the .right-sidebar element in the DOM. Stats panel cannot be attached.");
       return;
     }
 
-    // Clear any existing placeholder content in the target container
+    // Clear any existing placeholder content in the sidebar
     sidebarTarget.innerHTML = ''; 
 
-    // Create the stats panel content (HTML string remains the same)
+    // Create the stats panel content (using a temporary div just to set innerHTML easily)
     const statsContentHTML = `
-      <div class="right-stats-panel"> 
+      <div class="right-stats-panel"> <!-- Add a wrapper class for styling if needed -->
         <div class="header">
           <h3>VËREJTJET GJUHËSORE</h3>
           <!-- Add Edit button here if needed -->
@@ -396,22 +455,41 @@ export class QuillDrejtshkruaj {
       </div>
     `;
 
-    // Inject the stats panel HTML into the specific target container
+    // Inject the stats panel HTML into the sidebar target
     sidebarTarget.innerHTML = statsContentHTML;
     
+    // Note: We are no longer manipulating the Quill container's position directly here.
+    // It's assumed React places the Quill editor correctly within the .editor-area.
   }
 
   public updateStats() {
-    // Selectors need to target elements within the container now
-    const spellingCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-spelling .counter-value');
-    const grammarCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-grammar .counter-value');
-    const punctuationCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-punctuation .counter-value');
-    const totalCounter = document.querySelector('.right-sidebar .stats-panel-container .counter-total .counter-value');
+    try {
+      // Make sure counts are not negative
+      this.spellingCount = Math.max(0, this.spellingCount);
+      this.grammarCount = Math.max(0, this.grammarCount);
+      this.punctuationCount = Math.max(0, this.punctuationCount);
+      
+      // Log current stats for debugging
+      console.log('Updating stats:', {
+        spelling: this.spellingCount,
+        grammar: this.grammarCount,
+        punctuation: this.punctuationCount,
+        total: this.spellingCount + this.grammarCount + this.punctuationCount
+      });
+      
+      // Update the DOM elements IN THE SIDEBAR using the class properties
+      const spellingCounter = document.querySelector('.right-sidebar .counter-spelling .counter-value');
+      const grammarCounter = document.querySelector('.right-sidebar .counter-grammar .counter-value');
+      const punctuationCounter = document.querySelector('.right-sidebar .counter-punctuation .counter-value');
+      const totalCounter = document.querySelector('.right-sidebar .counter-total .counter-value');
 
-    if (spellingCounter) spellingCounter.textContent = this.spellingCount.toString();
-    if (grammarCounter) grammarCounter.textContent = this.grammarCount.toString();
-    if (punctuationCounter) punctuationCounter.textContent = this.punctuationCount.toString();
-    if (totalCounter) totalCounter.textContent = (this.spellingCount + this.grammarCount + this.punctuationCount).toString();
+      if (spellingCounter) spellingCounter.textContent = this.spellingCount.toString();
+      if (grammarCounter) grammarCounter.textContent = this.grammarCount.toString();
+      if (punctuationCounter) punctuationCounter.textContent = this.punctuationCount.toString();
+      if (totalCounter) totalCounter.textContent = (this.spellingCount + this.grammarCount + this.punctuationCount).toString();
+    } catch (error) {
+      console.error('Error updating stats:', error);
+    }
   }
 
   // Add method to clear cache for a specific range
@@ -422,6 +500,281 @@ export class QuillDrejtshkruaj {
       if (!(chunk.endOffset < start || chunk.startOffset > end)) {
         this.paragraphCache.delete(chunk.index);
       }
+    }
+  }
+
+  // Add an onKey handler to handle space key more aggressively
+  private addSpaceKeyHandler() {
+    // Add direct event listener for space key to stop highlight stretching
+    this.quill.root.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.keyCode === 32) {
+        // Get current cursor position before space is inserted
+        const selection = this.quill.getSelection();
+        if (selection) {
+          // Immediately remove any highlight that would extend past this point
+          this.stripHighlightsAtCursor(selection.index);
+          
+          // Schedule another check after the space is inserted
+          setTimeout(() => {
+            const newSelection = this.quill.getSelection();
+            if (newSelection) {
+              this.stripHighlightsAtCursor(newSelection.index);
+            }
+          }, 0);
+        }
+      }
+    });
+  }
+  
+  // Aggressively strip highlights at and after cursor
+  private stripHighlightsAtCursor(cursorPosition: number) {
+    try {
+      if (cursorPosition === undefined || cursorPosition < 0) {
+        console.warn('Invalid cursor position in stripHighlightsAtCursor:', cursorPosition);
+        return;
+      }
+      
+      // Validate cursor position is within document bounds
+      const textLength = this.quill.getText().length;
+      if (cursorPosition > textLength) {
+        console.warn('Cursor position out of bounds:', cursorPosition, 'text length:', textLength);
+        return;
+      }
+      
+      // For each match in our collection
+      this.matches.forEach(match => {
+        if (!match || typeof match.offset !== 'number' || typeof match.length !== 'number') {
+          return; // Skip invalid matches
+        }
+        
+        // If this match extends to or beyond cursor position
+        if (match.offset + match.length >= cursorPosition) {
+          // If match starts before cursor
+          if (match.offset < cursorPosition) {
+            try {
+              // 1. Remove the entire formatting
+              this.quill.formatText(match.offset, match.length, 'ltmatch', false, 'silent');
+              
+              // 2. Calculate new length that stops at cursor
+              const newLength = cursorPosition - match.offset;
+              
+              // 3. Only if something remains to highlight
+              if (newLength > 0) {
+                // 4. Create a new match object with correct length
+                const correctedMatch = { ...match, length: newLength };
+                
+                // 5. Apply the corrected highlighting (stopping at cursor)
+                this.quill.formatText(match.offset, newLength, 'ltmatch', correctedMatch, 'silent');
+                
+                // 6. Update the match length in our data
+                match.length = newLength;
+              }
+            } catch (err) {
+              console.error('Error trimming highlight at cursor:', err);
+            }
+          } else {
+            // For matches that start at or after cursor, remove formatting completely
+            try {
+              this.quill.formatText(match.offset, match.length, 'ltmatch', false, 'silent');
+            } catch (err) {
+              console.error('Error removing highlight after cursor:', err);
+            }
+          }
+        }
+      });
+      
+      // Restore cursor position safely
+      try {
+        const selection = this.quill.getSelection();
+        if (selection) {
+          this.quill.setSelection(selection.index, 0, 'silent');
+        }
+      } catch (err) {
+        console.error('Error restoring cursor position:', err);
+      }
+    } catch (err) {
+      console.error('Error in stripHighlightsAtCursor:', err);
+    }
+  }
+
+  // Call this to check all paragraphs (e.g., on load or paste)
+  private checkAllParagraphs() {
+    const text = this.quill.getText();
+    const chunks = TextChunker.getChunks(text);
+    for (const chunk of chunks) {
+      this.checkParagraphSpelling(chunk);
+    }
+  }
+
+  // Improved method to fix underline spreading when pressing space
+  private fixUnderlineSpread(changePosition: number) {
+    // First call the more aggressive method to handle any current highlights at cursor
+    this.stripHighlightsAtCursor(changePosition);
+    
+    // Additional processing if needed...
+    const text = this.quill.getText();
+    
+    // Force Quill to re-render to ensure formatting is correctly displayed
+    setTimeout(() => {
+      const selection = this.quill.getSelection();
+      if (selection) {
+        this.quill.setSelection(selection, 'silent');
+      }
+    }, 10);
+  }
+
+  // Checks spelling for a single paragraph chunk
+  private async checkParagraphSpelling(chunk: { text: string, startOffset: number, endOffset: number, index: number }) {
+    try {
+      if (!chunk.text.trim()) return;
+      
+      // If index was not set (like when calling from onTextChange), calculate it
+      if (chunk.index === -1) {
+        // Use the paragraph offset to determine a unique index
+        chunk.index = chunk.startOffset;
+      }
+      
+      this.loader.startLoading();
+      
+      const json = await this.getDrejtshkruajResults(chunk.text);
+      
+      if (json && json.matches) {
+        // Remove any existing matches in this range
+        const matchesToRemove = this.matches.filter(m => 
+          m.offset >= chunk.startOffset && m.offset < chunk.endOffset
+        );
+        
+        // Update stats counter for removed matches
+        matchesToRemove.forEach(m => {
+          if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount--;
+          if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount--;
+          if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount--;
+        });
+        
+        // Remove matches from the array
+        this.matches = this.matches.filter(m => 
+          !(m.offset >= chunk.startOffset && m.offset < chunk.endOffset)
+        );
+        
+        // Add new matches with adjusted offsets
+        const adjustedMatches = json.matches.map(match => ({
+          ...match,
+          offset: match.offset + chunk.startOffset
+        }));
+        
+        this.matches.push(...adjustedMatches);
+        
+        // Update stats counter for new matches
+        adjustedMatches.forEach(m => {
+          if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+          if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount++;
+          if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount++;
+        });
+        
+        console.log(`Added ${adjustedMatches.length} matches for paragraph at offset ${chunk.startOffset}`);
+      }
+      
+      // Update cache
+      this.paragraphCache.set(chunk.index, { text: chunk.text, startOffset: chunk.startOffset });
+      
+      // Update UI safely
+      try {
+        // Update stats
+        this.updateStats();
+        
+        // Focus on this paragraph's highlights but also refresh all to ensure consistent state
+        this.boxes.removeSuggestionBoxesInRange(chunk.startOffset, chunk.endOffset);
+        this.boxes.updateSuggestionBoxesForRange(chunk.startOffset, chunk.endOffset);
+        
+        // Do a full refresh to ensure all highlights are properly displayed
+        setTimeout(() => this.refreshAllHighlights(), 50);
+      } catch (error) {
+        console.error('Error updating UI after paragraph check:', error);
+      }
+      
+      this.loader.stopLoading();
+    } catch (error) {
+      console.error('Error in checkParagraphSpelling:', error);
+      this.loader.stopLoading();
+    }
+  }
+
+  /**
+   * Force a complete refresh of all highlights to ensure all suggestions are visible
+   */
+  private refreshAllHighlights() {
+    try {
+      console.log('Refreshing all highlights...');
+      
+      // Store current selection
+      const selection = this.quill.getSelection();
+      
+      // Get all current matches to re-apply
+      const matchesToReapply = [...this.matches];
+      
+      // First ensure counters are reset and recalculated
+      this.spellingCount = 0;
+      this.grammarCount = 0;
+      this.punctuationCount = 0;
+
+      // Recalculate stats from preserved matches
+      matchesToReapply.forEach(m => {
+        if (m.shortMessage.toLowerCase().includes('drejtshkrimore')) this.spellingCount++;
+        if (m.shortMessage.toLowerCase().includes('gramatikore')) this.grammarCount++;
+        if (m.shortMessage.toLowerCase().includes('pikë')) this.punctuationCount++;
+      });
+      
+      // Update the UI counters
+      this.updateStats();
+      
+      // Remove all highlights first
+      this.boxes.removeSuggestionBoxes();
+      
+      // Apply each match directly with minimal delay to reduce flickering
+      const applyMatches = () => {
+        console.log(`Re-applying ${matchesToReapply.length} matches...`);
+        
+        // Use Delta operations for better performance
+        let delta = new Delta();
+        let currentIndex = 0;
+        
+        // Sort matches by offset to process them in order
+        const sortedMatches = [...matchesToReapply].sort((a, b) => a.offset - b.offset);
+        
+        // Build a single delta operation for all formatting
+        sortedMatches.forEach(match => {
+          if (match.offset < currentIndex) {
+            return; // Skip overlapping matches
+          }
+          
+          // Retain up to the match
+          if (match.offset > currentIndex) {
+            delta.retain(match.offset - currentIndex);
+            currentIndex = match.offset;
+          }
+          
+          // Apply the highlight
+          delta.retain(match.length, { ltmatch: match });
+          currentIndex += match.length;
+        });
+        
+        // Apply the combined operations silently
+        if (delta.ops.length > 0) {
+          this.quill.updateContents(delta, 'silent');
+        }
+        
+        // Restore selection
+        if (selection) {
+          this.quill.setSelection(selection.index, selection.length || 0, 'silent');
+        }
+        
+        console.log('All highlights refreshed successfully');
+      };
+      
+      // Use a minimal delay to let Quill finish removing highlights
+      setTimeout(applyMatches, 5);
+    } catch (error) {
+      console.error('Error refreshing highlights:', error);
     }
   }
 }

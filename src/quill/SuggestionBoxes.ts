@@ -232,20 +232,174 @@ export class SuggestionBoxes {
   }
 
   public updateSuggestionBoxesForRange(startOffset: number, endOffset: number): void {
-    // Remove suggestion boxes formatting in the specified range
-    this.parent.quill.formatText(startOffset, endOffset - startOffset, 'ltmatch', false, 'silent');
-    
-    // Add suggestion boxes for matches that are fully within the specified range
-    this.parent.matches.forEach(match => {
-      if (match.offset >= startOffset && (match.offset + match.length) <= endOffset) {
-        this.addSuggestionBoxForMatch(match);
+    try {
+      // Validate parameters
+      if (startOffset === undefined || endOffset === undefined || 
+          startOffset < 0 || endOffset < startOffset) {
+        console.warn('Invalid range in updateSuggestionBoxesForRange:', {startOffset, endOffset});
+        return;
       }
-    });
+      
+      // Validate range is within document bounds
+      const textLength = this.parent.quill.getText().length;
+      if (startOffset > textLength) {
+        console.warn('Range start out of bounds:', startOffset, 'text length:', textLength);
+        return;
+      }
+      
+      // Adjust endOffset if needed to prevent going beyond text bounds
+      const safeEndOffset = Math.min(endOffset, textLength);
+      const range = safeEndOffset - startOffset;
+      
+      // Only proceed if range is positive
+      if (range <= 0) {
+        console.warn('Empty or invalid range in updateSuggestionBoxesForRange');
+        return;
+      }
+      
+      // Remove suggestion boxes formatting in the specified range (with error handling)
+      try {
+        this.parent.preventLoop();
+        this.parent.quill.formatText(startOffset, range, 'ltmatch', false, 'silent');
+      } catch (error) {
+        console.error('Error removing formatting in range:', error);
+        return; // If this fails, don't try to add new boxes
+      }
+      
+      // Add suggestion boxes for matches that are fully within the specified range
+      let addedCount = 0;
+      this.parent.matches.forEach(match => {
+        if (match && typeof match.offset === 'number' && typeof match.length === 'number' &&
+            match.offset >= startOffset && (match.offset + match.length) <= safeEndOffset) {
+          try {
+            this.addSuggestionBoxForMatch(match);
+            addedCount++;
+          } catch (error) {
+            console.error('Error adding suggestion box for match:', error, match);
+          }
+        }
+      });
+      
+      console.log(`Updated suggestion boxes in range [${startOffset}, ${safeEndOffset}], added ${addedCount} boxes`);
+    } catch (error) {
+      console.error('Error in updateSuggestionBoxesForRange:', error);
+    }
   }
 
   public addSuggestionBoxForMatch(match: any): void {
-    // Apply formatting to the match range. Here, we pass the match object as the value for ltmatch formatting.
-    this.parent.quill.formatText(match.offset, match.length, 'ltmatch', match, 'silent');
-    console.log('Added suggestion box for match at offset', match.offset);
+    if (!match || match.offset === undefined || match.length === undefined) {
+      console.warn('Cannot add suggestion box for invalid match:', match);
+      return;
+    }
+    
+    try {
+      // Get the current editor text
+      const text = this.parent.quill.getText();
+      
+      // Validate match bounds are within text range
+      if (match.offset < 0 || match.offset + match.length > text.length) {
+        console.warn('Match offset out of bounds:', match);
+        return;
+      }
+      
+      // Get the exact text at the match position
+      const matchText = text.slice(match.offset, match.offset + match.length);
+      
+      // If the matched text has changed or is empty, don't apply formatting
+      if (!matchText.trim()) {
+        console.warn('Match text is empty or whitespace only:', match);
+        return;
+      }
+
+      // IMPORTANT: Verify the text doesn't contain spaces or unwanted word boundaries
+      // This prevents highlights from spanning across multiple words
+      if (/\s/.test(matchText)) {
+        // Text contains spaces - find the first word only
+        const firstWordMatch = matchText.match(/^[^\s]+/);
+        if (firstWordMatch) {
+          // Adjust the match to only cover the first word
+          const adjustedMatch = {
+            ...match,
+            length: firstWordMatch[0].length
+          };
+          // Apply formatting to just the first word
+          this.parent.quill.formatText(match.offset, adjustedMatch.length, 'ltmatch', adjustedMatch, 'silent');
+          console.log('Added suggestion box for partial match (first word only):', adjustedMatch);
+        }
+      } else {
+        // Text is a single word - check if it ends at a word boundary
+        const isWordBoundaryAfter = 
+          match.offset + match.length >= text.length || 
+          /[\s.,!?;:)\]}]/.test(text[match.offset + match.length]);
+        
+        // Only apply formatting if at word boundary
+        if (isWordBoundaryAfter) {
+          // Apply formatting to the match range
+          this.parent.quill.formatText(match.offset, match.length, 'ltmatch', match, 'silent');
+          console.log('Added suggestion box for match at offset', match.offset);
+        } else {
+          // Find the next word boundary
+          let boundaryPos = match.offset;
+          for (let i = match.offset; i < Math.min(text.length, match.offset + match.length + 20); i++) {
+            if (/[\s.,!?;:)\]}]/.test(text[i])) {
+              boundaryPos = i;
+              break;
+            }
+          }
+          
+          // If we found a word boundary, adjust the match length
+          if (boundaryPos > match.offset) {
+            const adjustedLength = boundaryPos - match.offset;
+            this.parent.quill.formatText(match.offset, adjustedLength, 'ltmatch', {
+              ...match,
+              length: adjustedLength
+            }, 'silent');
+            console.log('Added suggestion box with adjusted length:', adjustedLength);
+          } else {
+            console.warn('Skipping non-word-boundary match:', matchText);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error adding suggestion box:', error);
+    }
+  }
+
+  /**
+   * Remove suggestion boxes format in a specific range.
+   * @param startOffset The start offset of the range
+   * @param endOffset The end offset of the range
+   */
+  public removeSuggestionBoxesInRange(startOffset: number, endOffset: number) {
+    try {
+      // Validate parameters
+      if (startOffset === undefined || endOffset === undefined || 
+          startOffset < 0 || endOffset < startOffset) {
+        console.warn('Invalid range in removeSuggestionBoxesInRange:', {startOffset, endOffset});
+        return;
+      }
+      
+      // Validate range is within document bounds
+      const textLength = this.parent.quill.getText().length;
+      if (startOffset > textLength) {
+        console.warn('Range start out of bounds:', startOffset, 'text length:', textLength);
+        return;
+      }
+      
+      // Adjust endOffset if needed to prevent going beyond text bounds
+      const safeEndOffset = Math.min(endOffset, textLength);
+      const range = safeEndOffset - startOffset;
+      
+      // Only proceed if range is positive
+      if (range <= 0) {
+        console.warn('Empty or invalid range in removeSuggestionBoxesInRange');
+        return;
+      }
+      
+      this.parent.preventLoop();
+      this.parent.quill.formatText(startOffset, range, 'ltmatch', false, 'silent');
+    } catch (error) {
+      console.error('Error in removeSuggestionBoxesInRange:', error);
+    }
   }
 }

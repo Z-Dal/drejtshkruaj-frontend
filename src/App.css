@@ -1,40 +1,267 @@
+/* App Structure */
 .App {
-  text-align: center;
+  display: flex;
+  height: 100%;
+  overflow: hidden; /* Prevent scrolling at the App level */
 }
 
+/* Header */
+.App-header {
+  background-color: #ffffff; /* White header */
+  padding: 10px 20px;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a73e8; /* Google Blue */
+  border-bottom: 1px solid #dee2e6; /* Subtle border */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px; /* Fixed height */
+  box-sizing: border-box;
+}
+
+/* Logo */
 .App-logo {
-  height: 40vmin;
+  font-weight: bold;
+  color: #1a73e8; /* Google Blue */
+  text-transform: lowercase; /* Drejtshkruaj style */
+}
+
+/* User Profile Icon */
+.user-profile {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #1a73e8; /* Google Blue */
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+/* Main Content Area */
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  overflow: hidden; /* Important for nested scrolling */
+}
+
+/* Left Sidebar */
+.left-sidebar {
+  width: 200px;
+  background-color: #f8f9fa; /* Light background */
+  padding: 20px;
+  border-right: 1px solid #dee2e6; /* Subtle border */
+  overflow-y: auto; /* Allow sidebar to scroll if needed */
+  box-sizing: border-box;
+}
+
+/* Editor Area */
+.editor-area {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Prevent scrolling here, handle in Quill */
+  background-color: #ffffff; /* White editor background */
+}
+
+/* Quill Editor Container */
+.ql-container {
+  flex-grow: 1;
+  overflow-y: auto; /* Allow Quill editor content to scroll */
+  height: calc(100vh - 60px - 41px); /* Adjust based on header/toolbar height */
+  font-size: 16px; /* Slightly larger base font */
+  line-height: 1.6;
+  border: none !important; /* Remove Quill borders */
+  padding: 0; /* No padding on container */
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ql-editor {
+  position: relative;
+  padding: 16px !important; /* EXACT padding - using 16px (1rem) for better alignment */
+  height: 100%;
+  caret-color: #000; /* Make cursor more visible */
+  min-height: 100px;
+  outline: none;
+}
+
+.ql-editor.ql-blank::before {
+  left: 16px !important; /* EXACT same padding as editor */
+  top: 16px !important;
+  font-style: normal;
+  color: #adb5bd;
+  position: absolute;
+  content: attr(data-placeholder);
   pointer-events: none;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* Reset any text indentation */
+.ql-editor p, 
+.ql-editor div,
+.ql-editor * {
+  text-indent: 0;
+  margin: 0;
+  padding: 0;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+/* Fix cursor */
+.ql-cursor, 
+.ql-cursor-caret {
+  left: 0 !important;
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Remove any first-child special styling */
+.ql-editor > *:first-child {
+  margin-top: 0 !important;
+}
+
+/* This prevents any whitespace issues */
+.ql-editor br {
+  display: none;
+}
+
+/* Quill Toolbar */
+.ql-toolbar {
+  background-color: #f8f9fa; /* Light background */
+  border: none !important; /* Remove Quill border */
+  border-bottom: 1px solid #dee2e6 !important; /* Add subtle bottom border */
+  padding: 8px 12px !important; /* Adjust padding */
+  box-sizing: border-box;
+}
+
+.ql-toolbar .ql-formats {
+  margin-right: 10px !important; /* Space between format groups */
+}
+
+.ql-toolbar button,
+.ql-toolbar .ql-picker {
+  outline: none;
+  transition: background-color 0.2s ease;
+}
+
+.ql-toolbar button:hover,
+.ql-toolbar .ql-picker:hover {
+  background-color: #e9ecef; /* Subtle hover */
+  color: #007bff;
+}
+
+.ql-toolbar .ql-active {
+  background-color: #cfe2ff; /* Light blue active state */
+  color: #007bff;
+}
+
+/* Right Sidebar (Stats Panel) */
+.right-sidebar {
+  width: 250px;
+  background-color: #f8f9fa; /* Light background */
+  border-left: 1px solid #dee2e6; /* Subtle border */
+  padding: 0; /* Remove padding, handled by inner panel */
+  overflow-y: auto; /* Allow sidebar scrolling */
+  box-sizing: border-box;
+}
+
+.right-stats-panel {
+  padding: 20px;
+}
+
+.right-stats-panel .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+.right-stats-panel .header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #495057;
+  text-transform: uppercase;
+}
+
+/* Edit Icon (Placeholder) */
+.right-stats-panel .header .edit-icon {
+  cursor: pointer;
+  color: #6c757d;
+}
+
+.stats-counter {
   display: flex;
   flex-direction: column;
+  gap: 12px; /* Space between counter items */
+}
+
+.counter-item {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  background-color: #ffffff; /* White background for items */
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); /* Subtle shadow */
 }
 
-.App-link {
-  color: #61dafb;
+.counter-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #495057;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.counter-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.counter-spelling .counter-dot {
+  background-color: #dc3545; /* Red */
+}
+
+.counter-grammar .counter-dot {
+  background-color: #ffc107; /* Yellow */
+}
+
+.counter-punctuation .counter-dot {
+  background-color: #6f42c1; /* Purple */
+}
+
+.counter-value {
+  font-weight: 600;
+  color: #212529;
+}
+
+.counter-total {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e0e0e0;
+  font-weight: bold;
+  background-color: transparent; /* No background for total */
+  box-shadow: none;
+}
+
+/* Suggestion Highlighting */
+quill-lt-match.spelling-error {
+  text-decoration: underline wavy red;
+}
+
+quill-lt-match.grammar-error {
+  text-decoration: underline wavy orange; /* Or another distinct color */
+}
+
+quill-lt-match.punctuation-error {
+  text-decoration: underline wavy purple; /* Or another distinct color */
 }
 
 /* Reset and base styles */

@@ -1,32 +1,39 @@
 /* In-text suggestion element */
 quill-lt-match {
   cursor: pointer;
-  border-bottom-width: 3px;
-  border-bottom-style: solid;
+  text-decoration: underline solid !important;
+  text-decoration-thickness: 2px !important;
+  text-decoration-skip-ink: none !important;
+  border-bottom: none !important;
+  background-color: rgba(255, 255, 255, 0.5); /* Default transparent background */
+  transition: background-color 0.2s ease;
 }
 
 /* Spelling errors - red */
 quill-lt-match.spelling-error {
-  border-bottom-color: #ff6a6a;
+  background-color: rgba(255, 106, 106, 0.08);
+  text-decoration-color: #ff6a6a !important;
 }
 quill-lt-match.spelling-error:hover {
-  background-color: rgba(255, 106, 106, 0.1);
+  background-color: rgba(255, 106, 106, 0.18);
 }
 
 /* Grammar errors - orange */
 quill-lt-match.grammar-error {
-  border-bottom-color: #ffa500;
+  background-color: rgba(255, 165, 0, 0.08);
+  text-decoration-color: #ffa500 !important;
 }
 quill-lt-match.grammar-error:hover {
-  background-color: rgba(255, 165, 0, 0.1);
+  background-color: rgba(255, 165, 0, 0.18);
 }
 
 /* Punctuation errors - light purple */
 quill-lt-match.punctuation-error {
-  border-bottom-color: #9d91e2;
+  background-color: rgba(157, 145, 226, 0.08);
+  text-decoration-color: #9d91e2 !important;
 }
 quill-lt-match.punctuation-error:hover {
-  background-color: rgba(157, 145, 226, 0.1);
+  background-color: rgba(157, 145, 226, 0.18);
 }
 
 /* Popup title colors matching the underlines - move these before the title styles */
@@ -48,7 +55,7 @@ quill-lt-match.punctuation-error:hover {
   background-color: #fff;
   border-radius: 7px;
   box-shadow: 0 8px 30px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
-  z-index: 1;
+  z-index: 1000;
   width: 250px;
   /* Overall padding of the popup container */
   padding: 0.5rem 1rem;
@@ -404,4 +411,10 @@ quill-lt-popup[data-popper-placement^="bottom"] > .quill-lt-popup-arrow {
   100% {
     transform: scale(1) rotate(0deg);
   }
+}
+
+/* Add higher z-index to the popup element itself */
+quill-lt-popup {
+  z-index: 1000;
+  position: absolute;
 }
